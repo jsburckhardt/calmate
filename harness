@@ -381,7 +381,6 @@ function orient(options = {}) {
     'vite.config.ts',
     'eslint.config.js',
     'tsconfig.json',
-    '.github/soft-factory/verification.yml',
     '.harness/contract.yml',
     '.harness/friction.jsonl',
   ].map((filePath) => ({ path: filePath, exists: fileExists(filePath) }));

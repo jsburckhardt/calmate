@@ -20,7 +20,7 @@ This component applies to application code, test code, package scripts, document
 - Use async/await for asynchronous file and command logic.
 - Follow Conventional Commits for commit messages and PR titles.
 - Include a `Co-authored-by` trailer on AI-authored commits.
-- Keep the CLI contract in `package.json` authoritative for local verification.
+- Keep `./harness` authoritative for local verification by wrapping package scripts.
 
 ### Interfaces
 - `npm run check:config` validates local JSON config.
@@ -33,7 +33,7 @@ This component applies to application code, test code, package scripts, document
 - Public utility functions have direct unit test coverage.
 - Component behavior is covered with Vitest and Testing Library where practical.
 - Formatting is managed with Prettier.
-- Verification commands pass before work is considered complete.
+- `./harness verify` passes before work is considered complete.
 
 ## Rationale
 
@@ -42,7 +42,7 @@ The PRD requires deterministic CLI commands for running, checking, and validatin
 ## Usage Examples
 
 ```bash
-npm run check
+./harness verify
 ```
 
 ```bash
@@ -52,7 +52,7 @@ npm run format
 ## Integration Guidelines
 
 - Add or update tests with behavior changes.
-- Update `package.json` scripts and `.github/soft-factory/verification.yml` together when verification changes.
+- Update `package.json` scripts and `.harness/contract.yml` together when verification changes.
 - Keep reusable logic in utility or config modules so components stay focused on rendering.
 
 ## Exceptions

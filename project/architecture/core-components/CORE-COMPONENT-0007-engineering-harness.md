@@ -61,7 +61,7 @@ The repository already exposes deterministic npm scripts, but humans and agents 
 ## Integration Guidelines
 
 - Add new wrapped commands to `package.json` first, then expose them through `./harness` and `.harness/contract.yml`.
-- Keep `.github/soft-factory/verification.yml`, package scripts, and harness verification behavior aligned.
+- Keep `.harness/contract.yml`, package scripts, and harness verification behavior aligned.
 - Promote repeated friction into explicit harness checks or contract entries.
 - Keep `AGENTS.md` as the canonical agent-facing instruction file for harness policy.
 - Keep RPIV agent definitions wired to the harness contract and evidence model.

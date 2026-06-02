@@ -1,0 +1,18 @@
+{
+  "command": "build",
+  "status": "pass",
+  "verdict": "pass",
+  "checks": [
+    {
+      "evidence": "build.log",
+      "exit_code": 0,
+      "id": "build",
+      "status": "pass"
+    }
+  ],
+  "evidence_path": ".harness/evidence/runs/2026-06-02T11-58-42-223Z",
+  "next_action": "Continue with ./harness verify when ready.",
+  "command_line": "npm run build",
+  "completed_at": "2026-06-02T11:59:05.405Z",
+  "started_at": "2026-06-02T11:58:53.727Z"
+}

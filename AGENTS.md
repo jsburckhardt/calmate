@@ -112,7 +112,7 @@ bootstrap:
     - AGENTS.md
     - LLM.txt
     - .devcontainer/devcontainer.json
-    - .github/soft-factory/verification.yml
+    - .harness/contract.yml
   templates:
     - project/architecture/ADR/ADR-0001-template.md
     - project/architecture/core-components/CORE-COMPONENT-0001-template.md
@@ -127,7 +127,7 @@ bootstrap:
     - must create a development standards core-component covering coding conventions, commit standards, and testing practices
     - must update DECISION-LOG.md with all new ADRs and core-components
     - must record decision records in the Decisions section of DECISION-LOG.md for every ADR and core-component created
-    - must configure project verification commands and write .github/soft-factory/verification.yml
+    - must configure project verification commands through .harness/contract.yml
     - must ask user to confirm or customize proposed verification commands
     - must not set up CI/CD pipelines or infrastructure
     - must not make feature-level decisions
@@ -239,7 +239,6 @@ verifier:
     - project/architecture/core-components/
     - AGENTS.md
     - project/issues/<ISSUE_NUMBER>/
-    - .github/soft-factory/verification.yml
     - .github/PULL_REQUEST_TEMPLATE.md
     - .harness/contract.yml
     - .harness/evidence/
