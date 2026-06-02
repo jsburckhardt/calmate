@@ -45,4 +45,4 @@ project/architecture/core-components/CORE-COMPONENT-0005-ui-layout-responsivenes
 project/architecture/core-components/CORE-COMPONENT-0006-development-standards.md — Shared development standards
 project/architecture/core-components/README.md                 — Core-components index
 project/issues/README.md                                       — Issues index and canonical structure
-.github/soft-factory/verification.yml                          — Configured project verification commands
+.harness/contract.yml                                          — Harness verification contract
