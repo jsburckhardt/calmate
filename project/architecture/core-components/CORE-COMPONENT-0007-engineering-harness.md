@@ -71,3 +71,7 @@ The repository already exposes deterministic npm scripts, but humans and agents 
 
 ## Enforcement
 
+- [x] Automated checks
+- [x] Code review checklist
+- [x] Test coverage requirements
+- [x] Harness verification evidence

@@ -33,9 +33,9 @@
       "status": "pass"
     }
   ],
-  "evidence_path": ".harness/evidence/runs/2026-06-02T04-47-49-779Z",
+  "evidence_path": ".harness/evidence/runs/2026-06-02T05-08-06-560Z",
   "next_action": "Verification passed. Evidence is authoritative.",
-  "completed_at": "2026-06-02T04:48:15.639Z",
+  "completed_at": "2026-06-02T05:08:41.989Z",
   "sequence": [
     "doctor",
     "lint",
@@ -43,5 +43,5 @@
     "build",
     "boot"
   ],
-  "started_at": "2026-06-02T04:47:49.780Z"
+  "started_at": "2026-06-02T05:08:06.560Z"
 }

@@ -41,6 +41,14 @@ const IMPORTANT_COMMANDS = new Set([
   'clean',
 ]);
 
+const BOOLEAN_OPTIONS = new Set(['json', 'stream']);
+const BOOLEAN_VALUE_OPTIONS = new Set(['blocked']);
+const BOOLEAN_VALUES = new Set(['true', 'false', 'yes', 'no', '1', '0']);
+const FATAL_BOOT_LOG_PATTERNS = [
+  /error when starting dev server/i,
+  /failed to scan for dependencies/i,
+];
+
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
 }
@@ -218,9 +226,6 @@ function result(command, status, verdict, checks, evidencePath, nextAction, extr
 }
 
 function exitCodeFor(resultValue) {
-  if (resultValue.command === 'friction add' && resultValue.status === 'pass') {
-    return EXIT.frictionRecorded;
-  }
   if (resultValue.verdict === 'pass') {
     return EXIT.pass;
   }
@@ -257,6 +262,16 @@ function parseArgs(argv) {
       const key = rawKey.replace(/-([a-z])/g, (_match, letter) => letter.toUpperCase());
       if (inlineValue !== undefined) {
         options[key] = inlineValue;
+      } else if (BOOLEAN_OPTIONS.has(key)) {
+        options[key] = true;
+      } else if (BOOLEAN_VALUE_OPTIONS.has(key)) {
+        const nextValue = argv[index + 1];
+        if (nextValue && !nextValue.startsWith('--') && BOOLEAN_VALUES.has(nextValue.toLowerCase())) {
+          options[key] = nextValue;
+          index += 1;
+        } else {
+          options[key] = true;
+        }
       } else if (argv[index + 1] && !argv[index + 1].startsWith('--')) {
         options[key] = argv[index + 1];
         index += 1;
@@ -413,7 +428,7 @@ function doctor(options = {}, context = {}) {
   const hardFailures = checks.filter((check) => check.status === 'fail');
   const softMissing = checks.filter((check) => check.status === 'missing');
   const verdict = hardFailures.length ? 'fail' : softMissing.length ? 'degraded' : 'pass';
-  const status = hardFailures.length ? 'fail' : 'pass';
+  const status = verdict;
   const nextAction = hardFailures.length
     ? 'Install missing tools or dependencies, then rerun ./harness doctor.'
     : softMissing.length
@@ -502,17 +517,26 @@ async function wrappedCommand(commandName, options = {}, context = {}) {
   return resultValue;
 }
 
+function fatalBootLogMatch(output) {
+  const plainOutput = output.replace(/\u001b\[[0-9;]*m/g, '');
+  const match = FATAL_BOOT_LOG_PATTERNS.find((pattern) => pattern.test(plainOutput));
+  return match ? match.source : '';
+}
+
 function probe(url) {
   return new Promise((resolve) => {
     const request = http.get(url, { timeout: 1000 }, (response) => {
       response.resume();
-      resolve(response.statusCode && response.statusCode < 500);
+      resolve({
+        ok: response.statusCode >= 200 && response.statusCode < 300,
+        statusCode: response.statusCode,
+      });
     });
     request.on('timeout', () => {
       request.destroy();
-      resolve(false);
+      resolve({ ok: false, statusCode: null });
     });
-    request.on('error', () => resolve(false));
+    request.on('error', () => resolve({ ok: false, statusCode: null }));
   });
 }
 
@@ -520,15 +544,15 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function stopProcess(child) {
+function stopProcess(child, signal = 'SIGTERM') {
   if (child.exitCode !== null || child.signalCode !== null) {
     return;
   }
   try {
     if (process.platform !== 'win32') {
-      process.kill(-child.pid, 'SIGTERM');
+      process.kill(-child.pid, signal);
     } else {
-      child.kill('SIGTERM');
+      child.kill(signal);
     }
   } catch (_error) {
     try {
@@ -563,11 +587,14 @@ async function boot(options = {}, context = {}) {
   });
   let exitCode = null;
   let closed = false;
+  let bootOutput = '';
   child.stdout.on('data', (data) => {
+    bootOutput += data.toString();
     logStream.write(data);
     if (options.stream) process.stdout.write(data);
   });
   child.stderr.on('data', (data) => {
+    bootOutput += data.toString();
     logStream.write(data);
     if (options.stream) process.stderr.write(data);
   });
@@ -578,23 +605,32 @@ async function boot(options = {}, context = {}) {
 
   let ready = false;
   const timeoutAt = Date.now() + 20000;
+  let readinessStatusCode = null;
   while (Date.now() < timeoutAt) {
-    ready = await probe(BOOT_URL);
+    const probeResult = await probe(BOOT_URL);
+    ready = probeResult.ok;
+    readinessStatusCode = probeResult.statusCode;
     if (ready) break;
     if (closed) break;
     await sleep(500);
   }
-  stopProcess(child);
+  if (ready) {
+    await sleep(2000);
+  }
+  const fatalBootPattern = fatalBootLogMatch(bootOutput);
+  stopProcess(child, 'SIGINT');
   await sleep(500);
-  logStream.write(`\nreadiness_url=${BOOT_URL}\nready=${ready}\nexit_code=${exitCode === null ? '' : exitCode}\n`);
+  logStream.write(`\nreadiness_url=${BOOT_URL}\nreadiness_status_code=${readinessStatusCode === null ? '' : readinessStatusCode}\nready=${ready}\nfatal_boot_pattern=${fatalBootPattern}\nexit_code=${exitCode === null ? '' : exitCode}\n`);
   await new Promise((resolve) => logStream.end(resolve));
 
-  const passed = ready;
+  const passed = ready && !fatalBootPattern;
   const checks = [{
     evidence: 'boot.log',
     exit_code: exitCode,
     id: 'boot-readiness',
     status: passed ? 'pass' : 'fail',
+    fatal_pattern: fatalBootPattern,
+    status_code: readinessStatusCode,
     url: BOOT_URL,
   }];
   const resultValue = result(
@@ -603,11 +639,13 @@ async function boot(options = {}, context = {}) {
     passed ? 'pass' : 'fail',
     checks,
     relativeToRoot(runDir),
-    passed ? 'Boot readiness proved by root route response.' : `Inspect ${relativeToRoot(logPath)}, then fix the boot path or readiness check.`,
+    passed ? 'Boot readiness proved by a 2xx root route response and clean startup log.' : `Inspect ${relativeToRoot(logPath)}, then fix the boot path or readiness check.`,
     {
       command_line: config.command,
       completed_at: timestamp(),
+      fatal_boot_pattern: fatalBootPattern,
       readiness_url: BOOT_URL,
+      readiness_status_code: readinessStatusCode,
       started_at: startedAt,
     },
   );
@@ -696,7 +734,7 @@ async function verify(options = {}) {
     }
   }
   const checks = checkResults.map((check) => ({
-    evidence: check.command === 'doctor' ? 'doctor.json' : `${check.command}.${check.command === 'boot' ? 'log' : 'log'}`,
+    evidence: check.command === 'doctor' ? 'doctor.json' : `${check.command}.log`,
     exit_code: check.checks && check.checks[0] ? check.checks[0].exit_code : undefined,
     id: check.command,
     status: check.verdict,
@@ -781,7 +819,7 @@ async function frictionAdd(options = {}) {
   fs.appendFileSync(FRICTION_PATH, `${JSON.stringify(entry)}\n`);
   const resultValue = result('friction add', 'pass', 'pass', [{ id: 'friction', status: 'recorded' }], relativeToRoot(FRICTION_PATH), 'Review recurring friction and promote it into harness checks.', { entry });
   printResult(resultValue, options);
-  return EXIT.frictionRecorded;
+  return EXIT.pass;
 }
 
 function frictionList(options = {}) {

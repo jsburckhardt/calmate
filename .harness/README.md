@@ -67,3 +67,6 @@ Record friction whenever a human or agent has to infer something the harness sho
 
 Recent entries can be listed with:
 
+```bash
+./harness friction list
+```

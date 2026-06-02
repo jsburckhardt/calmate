@@ -11,6 +11,6 @@ computing gzip size...
 [2mdist/[22m[32mindex.html                 [39m[1m[2m  0.39 kB[22m[1m[22m[2m │ gzip:  0.27 kB[22m
 [2mdist/[22m[2massets/[22m[35mindex-_sZgaNl3.css  [39m[1m[2m  3.47 kB[22m[1m[22m[2m │ gzip:  1.27 kB[22m
 [2mdist/[22m[2massets/[22m[36mindex-eWD0AglQ.js   [39m[1m[2m207.20 kB[22m[1m[22m[2m │ gzip: 61.58 kB[22m
-[32m✓ built in 2.54s[39m
+[32m✓ built in 3.06s[39m
 
 exit_code=0
