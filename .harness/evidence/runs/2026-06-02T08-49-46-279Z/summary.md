@@ -2,7 +2,7 @@
 
 - **Status:** pass
 - **Verdict:** pass
-- **Evidence:** .harness/evidence/runs/2026-06-02T05-08-06-560Z
+- **Evidence:** .harness/evidence/runs/2026-06-02T08-49-46-279Z
 
 ## Checks
 

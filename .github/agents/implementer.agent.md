@@ -22,6 +22,10 @@ target: vscode
 <instructions>
 You MUST read the task breakdown at project/issues/<ISSUE_NUMBER>/plan/02-task-breakdown.md before implementing.
 You MUST read the test plan at project/issues/<ISSUE_NUMBER>/plan/03-test-plan.md before implementing.
+You MUST read .harness/contract.yml before implementing.
+You MUST use ./harness commands for validation whenever possible.
+You MUST record friction when a raw command bypasses ./harness.
+You MUST include harness evidence paths in implementation notes.
 You MUST read all relevant ADRs under project/architecture/ADR/ before implementing.
 You MUST read all relevant core-components under project/architecture/core-components/ before implementing.
 You MUST implement within architectural boundaries defined by ADRs and core-components.
@@ -42,6 +46,7 @@ TEST_PLAN_PATH: "project/issues/<ISSUE_NUMBER>/plan/03-test-plan.md"
 IMPLEMENTATION_NOTES_PATH: "project/issues/<ISSUE_NUMBER>/implementation/README.md"
 ADR_DIR: "project/architecture/ADR"
 CORE_COMPONENT_DIR: "project/architecture/core-components"
+HARNESS_CONTRACT_PATH: ".harness/contract.yml"
 </constants>
 
 <formats>
@@ -59,11 +64,15 @@ CORE_COMPONENT_DIR: "project/architecture/core-components"
 ### Test Results
 <TEST_RESULTS>
 
+### Harness Evidence
+<HARNESS_EVIDENCE>
+
 ### Notes
 <NOTES>
 WHERE:
 - <CHANGES_SUMMARY> is Markdown.
 - <FILES_CHANGED> is String.
+- <HARNESS_EVIDENCE> is Markdown.
 - <NOTES> is Markdown.
 - <STATUS> is String.
 - <TASK_ID> is String.
@@ -84,6 +93,8 @@ RELEVANT_CORE_COMPONENTS: []
 COMPLETED_TASKS: []
 IMPLEMENTATION_LOG: []
 TEST_COMMAND: ""
+HARNESS_CONTRACT: ""
+HARNESS_EVIDENCE: ""
 </runtime>
 
 <triggers>
@@ -106,6 +117,8 @@ USE `read/readFile` where: filePath="project/issues/<ISSUE_NUMBER>/plan/02-task-
 CAPTURE TASK_BREAKDOWN from `read/readFile`
 USE `read/readFile` where: filePath="project/issues/<ISSUE_NUMBER>/plan/03-test-plan.md"
 CAPTURE TEST_PLAN from `read/readFile`
+USE `read/readFile` where: filePath=HARNESS_CONTRACT_PATH
+CAPTURE HARNESS_CONTRACT from `read/readFile`
 USE `search/fileSearch` where: pattern="project/architecture/ADR/ADR-*.md"
 CAPTURE ALL_ADRS from `search/fileSearch`
 USE `search/fileSearch` where: pattern="project/architecture/core-components/CORE-COMPONENT-*.md"
@@ -123,9 +136,12 @@ SET CODE_CHANGES := <CHANGES> (from "Agent Inference" using TASK_SPEC, RELEVANT_
 </process>
 
 <process id="verify-task" name="Run tests to verify the implemented task">
-SET TEST_COMMAND := <COMMAND> (from "Agent Inference" using TASK_BREAKDOWN, CURRENT_TASK_ID)
+SET TEST_COMMAND := <COMMAND> (from "Agent Inference" using TASK_BREAKDOWN, TEST_PLAN, CURRENT_TASK_ID, HARNESS_CONTRACT; prefer ./harness commands)
+IF TEST_COMMAND does not start with "./harness":
+  USE `execute/runInTerminal` where: command="./harness friction add --inference 'Implementer used a raw validation command' --should-prove 'The task plan should name a supported harness command' --helped-by 'Harness validation command in the task breakdown' --severity medium --blocked false"
 USE `execute/runInTerminal` where: command=TEST_COMMAND
 CAPTURE TEST_OUTPUT from `execute/runInTerminal`
+SET HARNESS_EVIDENCE := <EVIDENCE_PATH> (from "Agent Inference" using TEST_OUTPUT)
 SET TEST_PASSED := <RESULT> (from "Agent Inference" using TEST_OUTPUT, TEST_PLAN, CURRENT_TASK_ID)
 IF TEST_PASSED is false:
   USE `execute/testFailure`
@@ -135,7 +151,7 @@ IF TEST_PASSED is false:
 </process>
 
 <process id="update-impl-notes" name="Update implementation notes with task results">
-SET IMPL_ENTRY := <ENTRY> (from "Agent Inference" using CURRENT_TASK_ID, TEST_OUTPUT)
+SET IMPL_ENTRY := <ENTRY> (from "Agent Inference" using CURRENT_TASK_ID, TEST_OUTPUT, HARNESS_EVIDENCE)
 USE `edit/createDirectory` where: dirPath="project/issues/<ISSUE_NUMBER>/implementation"
 TRY:
   USE `read/readFile` where: filePath="project/issues/<ISSUE_NUMBER>/implementation/README.md"

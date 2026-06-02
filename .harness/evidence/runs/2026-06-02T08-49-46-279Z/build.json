@@ -10,9 +10,9 @@
       "status": "pass"
     }
   ],
-  "evidence_path": ".harness/evidence/runs/2026-06-02T05-08-06-560Z",
+  "evidence_path": ".harness/evidence/runs/2026-06-02T08-49-46-279Z",
   "next_action": "Continue with ./harness verify when ready.",
   "command_line": "npm run build",
-  "completed_at": "2026-06-02T05:08:37.857Z",
-  "started_at": "2026-06-02T05:08:26.150Z"
+  "completed_at": "2026-06-02T08:50:03.874Z",
+  "started_at": "2026-06-02T08:49:55.786Z"
 }

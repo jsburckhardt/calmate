@@ -38,3 +38,4 @@ Short, actionable statements derived from ADRs and core-components. More than on
 | 11 | Require ./harness verify evidence before completion claims | CORE-COMPONENT-0007 | 2026-06-02 |
 | 12 | Record harness bypasses and unproved inferences in .harness/friction.jsonl | CORE-COMPONENT-0007 | 2026-06-02 |
 | 13 | Keep harness agent policy in AGENTS.md | CORE-COMPONENT-0007 | 2026-06-02 |
+| 14 | Propagate harness context and evidence through every RPIV stage | CORE-COMPONENT-0007 | 2026-06-02 |

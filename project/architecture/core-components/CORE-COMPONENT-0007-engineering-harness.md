@@ -21,6 +21,7 @@ This component applies to repository operation, local verification, agent workfl
 - Write verification evidence under `.harness/evidence/`.
 - Record unproved assumptions and bypasses in `.harness/friction.jsonl`.
 - Run `./harness verify` before work is called complete.
+- Propagate harness context and evidence through every RPIV stage.
 
 ### Interfaces
 - `./harness orient` explains the repository and operating surface.
@@ -39,6 +40,7 @@ This component applies to repository operation, local verification, agent workfl
 - `.harness/contract.yml` describes detected, inferred, missing, and not configured behavior honestly.
 - Evidence files show what ran, where logs were written, exit codes, verdicts, and next actions.
 - Agent-facing instructions in `AGENTS.md` require harness usage before changes and completion claims.
+- RPIV agents consume harness contract, status, friction, and evidence during stage handoffs.
 
 ## Rationale
 
@@ -62,6 +64,7 @@ The repository already exposes deterministic npm scripts, but humans and agents 
 - Keep `.github/soft-factory/verification.yml`, package scripts, and harness verification behavior aligned.
 - Promote repeated friction into explicit harness checks or contract entries.
 - Keep `AGENTS.md` as the canonical agent-facing instruction file for harness policy.
+- Keep RPIV agent definitions wired to the harness contract and evidence model.
 - Preserve `.harness/evidence/` as the source of completion proof.
 
 ## Exceptions

@@ -13,12 +13,12 @@
       "url": "http://127.0.0.1:4173/"
     }
   ],
-  "evidence_path": ".harness/evidence/runs/2026-06-02T05-08-06-560Z",
+  "evidence_path": ".harness/evidence/runs/2026-06-02T08-49-46-279Z",
   "next_action": "Boot readiness proved by a 2xx root route response and clean startup log.",
   "command_line": "npm run dev -- --host 127.0.0.1 --port 4173 --strictPort",
-  "completed_at": "2026-06-02T05:08:41.988Z",
+  "completed_at": "2026-06-02T08:50:07.996Z",
   "fatal_boot_pattern": "",
   "readiness_url": "http://127.0.0.1:4173/",
   "readiness_status_code": 200,
-  "started_at": "2026-06-02T05:08:37.863Z"
+  "started_at": "2026-06-02T08:50:03.878Z"
 }

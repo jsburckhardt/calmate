@@ -145,6 +145,9 @@ research:
     - project/architecture/ADR/
     - project/architecture/core-components/
     - project/architecture/ADR/DECISION-LOG.md
+    - .harness/contract.yml
+    - .harness/friction.jsonl
+    - .harness/evidence/latest.json
     - application source code
   write_paths:
     - project/issues/<ISSUE_NUMBER>/research/00-research.md
@@ -158,6 +161,8 @@ research:
     - explicitly state if ADRs or core-components are required
     - propose ADR titles and core-component titles when applicable
     - never make architectural decisions — only propose them
+    - must consume harness orient, doctor, status, and friction context
+    - must include harness context in the research brief
 planner:
   file: .github/agents/planner.agent.md
   purpose: Own the Plan stage — read the research brief, commit architectural decisions via ADRs and core-components, then produce the action plan, task breakdown, and test plan.
@@ -171,6 +176,8 @@ planner:
     - project/architecture/ADR/DECISION-LOG.md
     - project/architecture/ADR/
     - project/architecture/core-components/
+    - .harness/contract.yml
+    - .harness/friction.jsonl
     - application source code
   write_paths:
     - project/architecture/ADR/ADR-####-slug.md
@@ -193,6 +200,7 @@ planner:
     - every task must have acceptance criteria
     - every task must have explicit test coverage requirements
     - tasks must reference relevant ADRs and core-components
+    - tasks and test plans must reference applicable harness commands
 implementer:
   file: .github/agents/implementer.agent.md
   purpose: Execute tasks from the plan, produce code and tests, and verify implementation against the test plan.
@@ -204,6 +212,7 @@ implementer:
     - project/issues/<ISSUE_NUMBER>/plan/
     - project/architecture/ADR/
     - project/architecture/core-components/
+    - .harness/contract.yml
     - application source code
   write_paths:
     - application source code
@@ -215,6 +224,8 @@ implementer:
     - deviations from ADRs or core-components require returning to the Plan stage
     - implementation must satisfy the test plan
     - must not skip tests defined in the test plan
+    - must use ./harness commands for validation whenever possible
+    - must record friction when bypassing ./harness
 verifier:
   file: .github/agents/verifier.agent.md
   purpose: Verify completed work — run tests, validate acceptance criteria, create commits following Conventional Commits, push, and open a PR for review.
@@ -230,6 +241,9 @@ verifier:
     - project/issues/<ISSUE_NUMBER>/
     - .github/soft-factory/verification.yml
     - .github/PULL_REQUEST_TEMPLATE.md
+    - .harness/contract.yml
+    - .harness/evidence/
+    - .harness/friction.jsonl
     - application source code and test files
   write_paths:
     - project/architecture/ADR/DECISION-LOG.md
@@ -241,9 +255,9 @@ verifier:
   templates:
     - .github/PULL_REQUEST_TEMPLATE.md
   guardrails:
-    - must not proceed if any configured or auto-detected verification step fails
-    - must load verification commands from .github/soft-factory/verification.yml when present
-    - must fall back to auto-detecting applicable verification steps from project files when verification config is absent
+    - must not proceed if ./harness verify fails
+    - must run ./harness verify --json as the primary verification gate
+    - must include harness evidence in PR and summary outputs
     - must fetch and validate acceptance criteria from the GitHub issue before creating the PR
     - must not proceed to push or PR creation if any acceptance criterion fails validation
     - must update the GitHub issue body to mark satisfied acceptance criteria as checked after PR creation
