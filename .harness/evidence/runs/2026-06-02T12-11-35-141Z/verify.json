@@ -1,0 +1,47 @@
+{
+  "command": "verify",
+  "status": "pass",
+  "verdict": "pass",
+  "checks": [
+    {
+      "evidence": "doctor.json",
+      "id": "doctor",
+      "status": "pass"
+    },
+    {
+      "evidence": "lint.log",
+      "exit_code": 0,
+      "id": "lint",
+      "status": "pass"
+    },
+    {
+      "evidence": "test.log",
+      "exit_code": 0,
+      "id": "test",
+      "status": "pass"
+    },
+    {
+      "evidence": "build.log",
+      "exit_code": 0,
+      "id": "build",
+      "status": "pass"
+    },
+    {
+      "evidence": "boot.log",
+      "exit_code": null,
+      "id": "boot",
+      "status": "pass"
+    }
+  ],
+  "evidence_path": ".harness/evidence/runs/2026-06-02T12-11-35-141Z",
+  "next_action": "Verification passed. Evidence is authoritative.",
+  "completed_at": "2026-06-02T12:11:59.299Z",
+  "sequence": [
+    "doctor",
+    "lint",
+    "test",
+    "build",
+    "boot"
+  ],
+  "started_at": "2026-06-02T12:11:35.142Z"
+}

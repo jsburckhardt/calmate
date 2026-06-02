@@ -1,0 +1,24 @@
+{
+  "command": "boot",
+  "status": "pass",
+  "verdict": "pass",
+  "checks": [
+    {
+      "evidence": "boot.log",
+      "exit_code": null,
+      "id": "boot-readiness",
+      "status": "pass",
+      "fatal_pattern": "",
+      "status_code": 200,
+      "url": "http://127.0.0.1:4173/"
+    }
+  ],
+  "evidence_path": ".harness/evidence/runs/2026-06-02T12-11-35-141Z",
+  "next_action": "Boot readiness proved by a 2xx root route response and clean startup log.",
+  "command_line": "npm run dev -- --host 127.0.0.1 --port 4173 --strictPort",
+  "completed_at": "2026-06-02T12:11:59.297Z",
+  "fatal_boot_pattern": "",
+  "readiness_url": "http://127.0.0.1:4173/",
+  "readiness_status_code": 200,
+  "started_at": "2026-06-02T12:11:55.181Z"
+}

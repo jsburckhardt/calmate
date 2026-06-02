@@ -1,0 +1,20 @@
+$ npm run test
+
+> calmate@0.1.0 test
+> vitest run
+
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90m/workspaces/calmate[39m
+
+ [32m✓[39m src/tests/calendar.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 658[2mms[22m[39m
+   [33m[2m✓[22m[39m CalendarPanel[2m > [22mrenders events on the matching dates [33m402[2mms[22m[39m
+ [32m✓[39m src/tests/panels.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[90m 197[2mms[22m[39m
+ [32m✓[39m src/tests/config.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 12[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m3 passed[39m[22m[90m (3)[39m
+[2m      Tests [22m [1m[32m13 passed[39m[22m[90m (13)[39m
+[2m   Start at [22m 12:11:40
+[2m   Duration [22m 5.53s[2m (transform 299ms, setup 565ms, collect 384ms, tests 866ms, environment 2.31s, prepare 386ms)[22m
+
+
+exit_code=0
