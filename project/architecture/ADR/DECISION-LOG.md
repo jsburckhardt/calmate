@@ -6,13 +6,17 @@ This file is the single registry of all architectural decisions and core-compone
 
 | ID | Title | Status | Date |
 |----|-------|--------|------|
-| _No ADRs yet. Copy `ADR-0001-template.md` in this directory and rename it._ | | | |
+| ADR-0002 | Use Vite, React, and TypeScript for the Dashboard | Accepted | 2026-06-02 |
 
 ## Core-Components
 
 | ID | Title | Status | Date |
 |----|-------|--------|------|
 | CORE-COMPONENT-0002 | Commit Standards | Adopted | 2026-05-05 |
+| CORE-COMPONENT-0003 | Config Validation | Adopted | 2026-06-02 |
+| CORE-COMPONENT-0004 | Error Handling | Adopted | 2026-06-02 |
+| CORE-COMPONENT-0005 | UI Layout and Responsiveness | Adopted | 2026-06-02 |
+| CORE-COMPONENT-0006 | Development Standards | Adopted | 2026-06-02 |
 
 ## Decisions
 
@@ -23,3 +27,9 @@ Short, actionable statements derived from ADRs and core-components. More than on
 | 1 | Enforce Conventional Commits v1.0.0 on every commit message | CORE-COMPONENT-0002 | 2026-05-05 |
 | 2 | Require Conventional Commits format on PR titles | CORE-COMPONENT-0002 | 2026-05-05 |
 | 3 | Require Co-authored-by trailer on all AI-authored commits | CORE-COMPONENT-0002 | 2026-05-05 |
+| 4 | Build CalMate as a Vite React TypeScript app managed with npm | ADR-0002 | 2026-06-02 |
+| 5 | Use Vitest, ESLint, Prettier, Zod, and tsx for the app quality harness | ADR-0002 | 2026-06-02 |
+| 6 | Validate all dashboard JSON config with shared Zod schemas before use | CORE-COMPONENT-0003 | 2026-06-02 |
+| 7 | Surface config failures through clear CLI errors and runtime fallback UI | CORE-COMPONENT-0004 | 2026-06-02 |
+| 8 | Preserve the calendar as the dominant dashboard panel across responsive layouts | CORE-COMPONENT-0005 | 2026-06-02 |
+| 9 | Treat package scripts and verification.yml as the authoritative verification contract | CORE-COMPONENT-0006 | 2026-06-02 |

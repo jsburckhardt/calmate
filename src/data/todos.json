@@ -1,0 +1,19 @@
+{
+  "todos": [
+    {
+      "id": "todo-001",
+      "title": "Review Q2 report",
+      "done": false
+    },
+    {
+      "id": "todo-002",
+      "title": "Backup database",
+      "done": true
+    },
+    {
+      "id": "todo-003",
+      "title": "Plan dashboard config updates",
+      "done": false
+    }
+  ]
+}

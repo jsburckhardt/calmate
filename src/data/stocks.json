@@ -1,0 +1,19 @@
+{
+  "stocks": [
+    {
+      "ticker": "AAPL",
+      "name": "Apple",
+      "price": 175.32
+    },
+    {
+      "ticker": "MSFT",
+      "name": "Microsoft",
+      "price": 334.87
+    },
+    {
+      "ticker": "NVDA",
+      "name": "NVIDIA",
+      "price": 924.79
+    }
+  ]
+}

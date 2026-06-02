@@ -1,0 +1,45 @@
+{
+  "news": [
+    {
+      "id": "news-001",
+      "title": "Major cloud outage impacts multiple services",
+      "source": "Example IT News",
+      "url": "https://example.com/cloud-outage",
+      "publishedAt": "2026-06-02T08:00:00+10:00"
+    },
+    {
+      "id": "news-002",
+      "title": "New browser security baseline rolls out",
+      "source": "Example Security",
+      "url": "https://example.com/browser-security",
+      "publishedAt": "2026-06-01T09:30:00+10:00"
+    },
+    {
+      "id": "news-003",
+      "title": "Open-source maintainers publish supply-chain guidance",
+      "source": "Example Open Source",
+      "url": "https://example.com/supply-chain-guidance",
+      "publishedAt": "2026-05-31T14:15:00+10:00"
+    },
+    {
+      "id": "news-004",
+      "title": "New TypeScript release improves editor diagnostics",
+      "source": "Example DevTools",
+      "url": "https://example.com/typescript-diagnostics",
+      "publishedAt": "2026-05-30T11:00:00+10:00"
+    },
+    {
+      "id": "news-005",
+      "title": "Container runtime update focuses on developer ergonomics",
+      "source": "Example Containers",
+      "url": "https://example.com/container-runtime",
+      "publishedAt": "2026-05-29T16:45:00+10:00"
+    },
+    {
+      "id": "news-006",
+      "title": "Static analysis tools add more JavaScript rules",
+      "source": "Example Quality",
+      "publishedAt": "2026-05-28T07:10:00+10:00"
+    }
+  ]
+}

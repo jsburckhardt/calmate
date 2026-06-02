@@ -100,6 +100,8 @@ bootstrap:
     - project/architecture/ADR/ADR-####-slug.md
     - project/architecture/core-components/CORE-COMPONENT-####-slug.md
     - project/architecture/ADR/DECISION-LOG.md
+    - application source code
+    - package.json
     - README.md
     - docs/README.md
     - AGENTS.md
@@ -249,6 +251,43 @@ verifier:
     - must not modify application source code
     - must verify the branch is clean after all commits
     - must write summary.md to project/issues/<ISSUE_NUMBER>/verify/ after PR creation
+harness-cli-it:
+  file: .github/agents/harness-cli-it.agent.md
+  purpose: Create a repo-local engineering harness CLI that wraps existing commands, records evidence, and exposes supported human and agent workflows.
+  tools:
+    - codebase exploration
+    - file creation and editing
+    - terminal execution
+    - problem inspection
+    - todo tracking
+  read_paths:
+    - package.json
+    - Makefile
+    - justfile
+    - Taskfile.yml
+    - pyproject.toml
+    - requirements.txt
+    - Cargo.toml
+    - go.mod
+    - .devcontainer/devcontainer.json
+    - .github/workflows/
+  write_paths:
+    - harness
+    - .harness/contract.yml
+    - .harness/evidence/
+    - .harness/friction.jsonl
+    - .harness/README.md
+    - .github/copilot-instructions.md
+  templates: []
+  guardrails:
+    - must make ./harness the supported operating surface for humans and agents
+    - must detect and wrap existing project commands without inventing a new build system
+    - must return pass, fail, degraded, or unknown verdicts for every command
+    - must support --json output for important commands
+    - must write verify evidence under .harness/evidence/
+    - must record each inference as a friction entry
+    - must update agent instructions to require ./harness usage
+    - must run ./harness verify before claiming completion
 issue-generator:
   file: .github/agents/issue-generator.agent.md
   purpose: Analyze codebase history for recurring pitfalls, draft a comprehensive GitHub issue with structured acceptance criteria, dispatch a rubber-duck subagent to critique it, then create the issue via gh. Runs before the RPIV pipeline to produce properly formatted issues.
