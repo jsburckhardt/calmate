@@ -10,6 +10,8 @@ The harness wraps existing npm scripts. It does not replace the project build sy
 ./harness help
 ./harness orient
 ./harness doctor
+./harness install
+./harness check_config
 ./harness lint
 ./harness test
 ./harness build
@@ -26,6 +28,8 @@ Important commands support `--json`.
 
 | Harness command | Wrapped command | Status |
 |-----------------|-----------------|--------|
+| `install` | `npm install` | detected |
+| `check_config` | `npm run check:config` | detected |
 | `lint` | `npm run lint` | detected |
 | `test` | `npm run test` | detected |
 | `build` | `npm run build` | detected |

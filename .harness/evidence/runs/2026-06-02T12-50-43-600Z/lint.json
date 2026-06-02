@@ -1,0 +1,18 @@
+{
+  "command": "lint",
+  "status": "pass",
+  "verdict": "pass",
+  "checks": [
+    {
+      "evidence": "lint.log",
+      "exit_code": 0,
+      "id": "lint",
+      "status": "pass"
+    }
+  ],
+  "evidence_path": ".harness/evidence/runs/2026-06-02T12-50-43-600Z",
+  "next_action": "Continue with ./harness verify when ready.",
+  "command_line": "npm run lint",
+  "completed_at": "2026-06-02T12:50:48.612Z",
+  "started_at": "2026-06-02T12:50:43.624Z"
+}

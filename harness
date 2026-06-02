@@ -344,6 +344,8 @@ function printHelp(options = {}) {
     { name: 'help', description: 'Show harness commands.' },
     { name: 'orient', description: 'Explain the repo and operating surface.' },
     { name: 'doctor', description: 'Check whether the repo is ready to operate.' },
+    { name: 'install', description: 'Run the detected install command.' },
+    { name: 'check_config', description: 'Run the detected config validation command.' },
     { name: 'lint', description: 'Run the detected lint command.' },
     { name: 'test', description: 'Run the detected test command.' },
     { name: 'build', description: 'Run the detected build command.' },
@@ -742,13 +744,20 @@ async function verify(options = {}) {
   const hasUnknown = checkResults.some((check) => check.verdict === 'unknown');
   const hasDegraded = checkResults.some((check) => check.verdict === 'degraded');
   const verdict = hasFail ? 'fail' : hasUnknown ? 'unknown' : hasDegraded ? 'degraded' : 'pass';
+  const nextAction = verdict === 'pass'
+    ? 'Verification passed. Evidence is authoritative.'
+    : verdict === 'degraded'
+      ? 'Review degraded checks, then rerun ./harness verify if the missing checks must be enforced.'
+      : verdict === 'unknown'
+        ? 'Configure unknown checks, then rerun ./harness verify.'
+        : 'Fix failing checks, then rerun ./harness verify.';
   const resultValue = result(
     'verify',
-    verdict === 'pass' ? 'pass' : 'fail',
+    verdict,
     verdict,
     checks,
     relativeToRoot(runDir),
-    verdict === 'pass' ? 'Verification passed. Evidence is authoritative.' : 'Fix failing or unknown checks, then rerun ./harness verify.',
+    nextAction,
     {
       completed_at: timestamp(),
       sequence,
@@ -863,7 +872,7 @@ async function main() {
     const resultValue = doctor(options);
     return exitCodeFor(resultValue);
   }
-  if (['lint', 'test', 'build', 'clean'].includes(command)) {
+  if (['install', 'check_config', 'lint', 'test', 'build', 'clean'].includes(command)) {
     const resultValue = await wrappedCommand(command, options);
     return exitCodeFor(resultValue);
   }

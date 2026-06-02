@@ -1,0 +1,18 @@
+{
+  "command": "test",
+  "status": "pass",
+  "verdict": "pass",
+  "checks": [
+    {
+      "evidence": "test.log",
+      "exit_code": 0,
+      "id": "test",
+      "status": "pass"
+    }
+  ],
+  "evidence_path": ".harness/evidence/runs/2026-06-02T12-50-43-600Z",
+  "next_action": "Continue with ./harness verify when ready.",
+  "command_line": "npm run test",
+  "completed_at": "2026-06-02T12:50:59.192Z",
+  "started_at": "2026-06-02T12:50:48.616Z"
+}
