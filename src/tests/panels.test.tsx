@@ -79,7 +79,10 @@ describe('dashboard panels', () => {
 
     render(<NewsPanel news={news} />);
 
-    expect(screen.getByRole('link', { name: 'News 1' })).toBeDefined();
+    const newsLink = screen.getByRole('link', { name: 'News 1' });
+
+    expect(newsLink).toBeDefined();
+    expect(newsLink.getAttribute('rel')).toBe('noopener noreferrer');
     expect(screen.getByText('News 5')).toBeDefined();
     expect(screen.queryByText('News 6')).toBeNull();
   });

@@ -62,6 +62,25 @@ describe('CalendarPanel', () => {
     expect(within(releaseDayCell as HTMLElement).getByText('12')).toBeDefined();
   });
 
+  it('shows the current-month empty state when only adjacent-month events are visible', () => {
+    render(
+      <CalendarPanel
+        events={[
+          {
+            id: 'evt-adjacent',
+            title: 'Adjacent Month Event',
+            date: '2026-05-31',
+          },
+        ]}
+        initialDate={new Date(2026, 5, 2)}
+        today={new Date(2026, 5, 2)}
+      />,
+    );
+
+    expect(screen.getByText('Adjacent Month Event')).toBeDefined();
+    expect(screen.getByText('No events configured for this month.')).toBeDefined();
+  });
+
   it('navigates previous month, next month, and today', () => {
     render(
       <CalendarPanel

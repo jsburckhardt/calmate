@@ -26,8 +26,9 @@ function CalendarPanel({
   );
   const monthGrid = useMemo(() => createMonthGrid(viewDate, today), [today, viewDate]);
   const eventsByDate = useMemo(() => groupEventsByDate(events), [events]);
-  const visibleEventCount = monthGrid.reduce(
-    (count, day) => count + (eventsByDate.get(day.dateKey)?.length ?? 0),
+  const currentMonthEventCount = monthGrid.reduce(
+    (count, day) =>
+      day.isCurrentMonth ? count + (eventsByDate.get(day.dateKey)?.length ?? 0) : count,
     0,
   );
 
@@ -98,7 +99,7 @@ function CalendarPanel({
         })}
       </div>
 
-      {visibleEventCount === 0 ? (
+      {currentMonthEventCount === 0 ? (
         <p className="empty-state">No events configured for this month.</p>
       ) : null}
     </section>

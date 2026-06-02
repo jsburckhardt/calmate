@@ -23,7 +23,7 @@ function NewsPanel({ news }: NewsPanelProps) {
           {visibleNews.map((item) => (
             <li key={item.id}>
               {item.url ? (
-                <a href={item.url} target="_blank" rel="noreferrer">
+                <a href={item.url} target="_blank" rel="noopener noreferrer">
                   {item.title}
                 </a>
               ) : (
