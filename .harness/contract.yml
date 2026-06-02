@@ -1,0 +1,73 @@
+version: 1
+
+project:
+  name: calmate
+  name_status: detected
+  type: web_app
+  type_status: inferred
+  language: TypeScript
+  language_status: detected
+  package_manager: npm
+  package_manager_status: detected
+  stack:
+    - Vite
+    - React
+    - TypeScript
+    - Vitest
+    - ESLint
+
+commands:
+  install:
+    command: npm install
+    status: detected
+
+  check_config:
+    command: npm run check:config
+    status: detected
+
+  lint:
+    command: npm run lint
+    status: detected
+
+  test:
+    command: npm run test
+    status: detected
+
+  build:
+    command: npm run build
+    status: detected
+
+  boot:
+    command: npm run dev -- --host 127.0.0.1 --port 4173 --strictPort
+    status: inferred
+    readiness:
+      type: http
+      url: http://127.0.0.1:4173/
+      status: inferred
+
+  clean:
+    command: ""
+    status: not_configured
+
+verify:
+  sequence:
+    - doctor
+    - lint
+    - test
+    - build
+    - boot
+
+evidence:
+  directory: .harness/evidence
+  latest: .harness/evidence/latest.json
+  runs: .harness/evidence/runs
+
+friction:
+  ledger: .harness/friction.jsonl
+  key_question: What did the agent have to infer that the harness should have proved?
+
+agent_policy:
+  required_cli: ./harness
+  bypass_requires_friction: true
+  completion_command: ./harness verify
+

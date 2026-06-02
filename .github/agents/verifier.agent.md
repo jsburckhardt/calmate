@@ -17,10 +17,12 @@ target: vscode
 ---
 
 <instructions>
-You MUST run all configured project verification steps and confirm all checks pass before proceeding with any git operations.
-You MUST load verification commands from `.github/soft-factory/verification.yml` when it exists.
-You MUST fall back to auto-detecting and running all applicable verification steps from project files when verification config is absent.
-You MUST NOT proceed if any configured or auto-detected verification step fails; stop immediately and report which step failed.
+You MUST run ./harness verify --json as the primary verification gate before any git operations.
+You MUST treat .harness/evidence as the authoritative completion proof.
+You MUST include the harness evidence path in PR and summary outputs.
+You MUST NOT use raw verification commands unless ./harness is unavailable.
+You MUST record friction before any raw verification command bypasses ./harness.
+You MUST NOT proceed if ./harness verify fails; stop immediately and report the failing harness check.
 You MUST check the current git branch before making changes.
 You MUST NOT push directly to main or master; always work on a feature branch.
 You MUST create a feature branch following the pattern <type>/<ISSUE_NUMBER>-<short-slug> when on main or master, where <ISSUE_NUMBER> is the GitHub issue number.
@@ -58,7 +60,8 @@ ADR_DIR: "project/architecture/ADR"
 CORE_COMPONENT_DIR: "project/architecture/core-components"
 AGENTS_MD_PATH: "AGENTS.md"
 ISSUES_DIR: "project/issues"
-VERIFICATION_CONFIG_PATH: ".github/soft-factory/verification.yml"
+HARNESS_CONTRACT_PATH: ".harness/contract.yml"
+HARNESS_VERIFY_COMMAND: "./harness verify --json"
 PR_TEMPLATE_PATH: ".github/PULL_REQUEST_TEMPLATE.md"
 AC_START_MARKER: "<!-- ACCEPTANCE_CRITERIA_START -->"
 AC_END_MARKER: "<!-- ACCEPTANCE_CRITERIA_END -->"
@@ -68,18 +71,6 @@ CO_AUTHOR_TRAILER: "Co-authored-by: github-copilot[bot] <175728472+github-copilo
 PROTECTED_BRANCHES: YAML<<
 - main
 - master
->>
-TEST_RUNNER_SIGNALS: YAML<<
-- file: go.mod
-  command: go test ./...
-- file: package.json
-  command: npm test
-- file: pytest.ini
-  command: pytest
-- file: pyproject.toml
-  command: pytest
-- file: Makefile
-  command: make test
 >>
 </constants>
 
@@ -165,7 +156,7 @@ WHERE:
 - <ISSUE_TITLE> is String.
 - <PR_TITLE> is String.
 - <PR_URL> is URI.
-- <VERIFICATION_SECTION> is Markdown; table with columns `| Category | Command | Status |` listing each verification step with pass or fail status, or the text `No configured verification commands detected` if none.
+- <VERIFICATION_SECTION> is Markdown; table with columns `| Category | Command | Status | Evidence |` listing each harness step with pass or fail status and evidence path, or the text `No harness verification result detected` if empty.
 </format>
 
 <format id="VERIFY_ERROR" name="Verify Error" purpose="Report a blocking error that prevents verification or shipping.">
@@ -209,6 +200,9 @@ ACCEPTANCE_CRITERIA: []
 AC_VALIDATION_RESULTS: []
 AC_ALL_PASSED: false
 ISSUE_BODY: ""
+HARNESS_CONTRACT: ""
+HARNESS_VERIFY_RESULT: ""
+HARNESS_EVIDENCE_PATH: ""
 </runtime>
 
 <triggers>
@@ -275,17 +269,10 @@ USE `edit/createFile` where: content=UPDATED_BODY, filePath="/tmp/issue-body.md"
 USE `execute/runInTerminal` where: command="gh issue edit <ISSUE_NUMBER> --body-file /tmp/issue-body.md"
 </process>
 
-<process id="load-verification-config" name="Load verification commands from config file or fall back to auto-detection">
-USE `search/fileSearch` where: pattern=VERIFICATION_CONFIG_PATH
-CAPTURE CONFIG_EXISTS from `search/fileSearch`
-IF CONFIG_EXISTS is not empty:
-  USE `read/readFile` where: filePath=VERIFICATION_CONFIG_PATH
-  CAPTURE CONFIG_CONTENT from `read/readFile`
-  SET VERIFICATION_COMMANDS := <STEP_LIST> (from "Agent Inference" using CONFIG_CONTENT; normalize to a list of {category, command} objects)
-ELSE:
-  USE `search/fileSearch` where: pattern="go.mod,package.json,pytest.ini,pyproject.toml,Makefile"
-  CAPTURE PROJECT_FILES from `search/fileSearch`
-  SET VERIFICATION_COMMANDS := <STEP_LIST> (from "Agent Inference" using PROJECT_FILES, TEST_RUNNER_SIGNALS; normalize to a list of {category, command} objects populating at least the test category)
+<process id="load-verification-config" name="Load harness verification command and contract">
+USE `read/readFile` where: filePath=HARNESS_CONTRACT_PATH
+CAPTURE HARNESS_CONTRACT from `read/readFile`
+SET VERIFICATION_COMMANDS := [{category: "harness", command: HARNESS_VERIFY_COMMAND}] (from "Agent Inference")
 </process>
 
 <process id="run-verification" name="Execute all configured verification steps and track results per category">
@@ -293,6 +280,9 @@ SET VERIFICATION_PASSED := true (from "Agent Inference")
 FOREACH step IN VERIFICATION_COMMANDS:
   USE `execute/runInTerminal` where: command=step.command
   CAPTURE STEP_OUTPUT from `execute/runInTerminal`
+  IF step.command = HARNESS_VERIFY_COMMAND:
+    SET HARNESS_VERIFY_RESULT := STEP_OUTPUT (from "Agent Inference")
+    SET HARNESS_EVIDENCE_PATH := <EVIDENCE_PATH> (from "Agent Inference" using STEP_OUTPUT)
   SET STEP_PASSED := <RESULT> (from "Agent Inference" using STEP_OUTPUT)
   SET VERIFICATION_RESULTS := VERIFICATION_RESULTS + [{category: step.category, command: step.command, passed: STEP_PASSED, output: STEP_OUTPUT}] (from "Agent Inference")
   IF STEP_PASSED is false:
@@ -383,7 +373,7 @@ USE `read/readFile` where: filePath=PR_TEMPLATE_PATH
 CAPTURE PR_TEMPLATE from `read/readFile`
 SET PR_TITLE := <TITLE> (from "Agent Inference" using ISSUE_NUMBER, SHORT_SLUG; must follow Conventional Commits format)
 SET AC_SECTION := <SECTION> (from "Agent Inference" using AC_VALIDATION_RESULTS; render each criterion as `- [x]` if passed or `- [ ]` if not_verifiable, with evidence summary per item)
-SET PR_BODY := <BODY> (from "Agent Inference" using PR_TEMPLATE, ISSUE_NUMBER, AC_SECTION, COMMITS, ADR_CHANGES, CC_CHANGES, VERIFICATION_RESULTS; populate all template sections, replace issue number placeholder, insert AC_SECTION between ACCEPTANCE_CRITERIA_START/END markers, assert body contains "Closes #<ISSUE_NUMBER>")
+SET PR_BODY := <BODY> (from "Agent Inference" using PR_TEMPLATE, ISSUE_NUMBER, AC_SECTION, COMMITS, ADR_CHANGES, CC_CHANGES, VERIFICATION_RESULTS, HARNESS_EVIDENCE_PATH; populate all template sections, replace issue number placeholder, insert AC_SECTION between ACCEPTANCE_CRITERIA_START/END markers, assert body contains "Closes #<ISSUE_NUMBER>")
 USE `edit/createFile` where: content=PR_BODY, filePath="/tmp/pr-body.md"
 USE `execute/runInTerminal` where: command="gh pr create --title '<PR_TITLE>' --body-file /tmp/pr-body.md"
 CAPTURE PR_OUTPUT from `execute/runInTerminal`
@@ -399,7 +389,7 @@ SET FEATURE_DESCRIPTION := <TEXT> (from "Agent Inference" using ISSUE_TITLE, ISS
 SET COMMITS_ROWS := <ROWS> (from "Agent Inference" using COMMITS; one `| <short-hash> | <message> |` row per commit in chronological order; excludes the summary commit itself)
 SET AC_ROWS := <ROWS> (from "Agent Inference" using AC_VALIDATION_RESULTS; one row per criterion as `| ✅ passed | criterion text | evidence |` or `| ⬜ not verifiable | criterion text | evidence |`)
 SET ADR_CC_SECTION := <SECTION> (from "Agent Inference" using ADR_CHANGES, CC_CHANGES; table with `| ID | Title |` columns listing referenced items, or `None referenced` if both are empty)
-SET VERIFICATION_SECTION := <SECTION> (from "Agent Inference" using VERIFICATION_RESULTS; table with `| Category | Command | Status |` columns listing each step with pass or fail, or `No configured verification commands detected` if empty)
+SET VERIFICATION_SECTION := <SECTION> (from "Agent Inference" using VERIFICATION_RESULTS, HARNESS_EVIDENCE_PATH; table with `| Category | Command | Status | Evidence |` columns listing each step with pass or fail and harness evidence path, or `No harness verification result detected` if empty)
 SET GENERATED_AT := <TIMESTAMP> (from "Agent Inference"; current ISO 8601 timestamp)
 SET SUMMARY_CONTENT := <CONTENT> (from "Agent Inference" using SUMMARY_REPORT format, ISSUE_NUMBER, ISSUE_TITLE, FEATURE_DESCRIPTION, BRANCH_NAME, PR_TITLE, PR_URL, COMMITS_ROWS, AC_ROWS, ADR_CC_SECTION, VERIFICATION_SECTION, GENERATED_AT; content must not include secrets, tokens, environment variables, raw command output, or absolute local filesystem paths)
 TRY:

@@ -1,0 +1,68 @@
+{
+  "command": "doctor",
+  "status": "pass",
+  "verdict": "pass",
+  "checks": [
+    {
+      "id": "node",
+      "status": "pass",
+      "detail": "Node.js runtime is required."
+    },
+    {
+      "id": "npm",
+      "status": "pass",
+      "detail": "npm package manager is required."
+    },
+    {
+      "id": "package.json",
+      "status": "pass",
+      "detail": "Project manifest."
+    },
+    {
+      "id": "package-lock.json",
+      "status": "pass",
+      "detail": "npm lockfile."
+    },
+    {
+      "id": "node_modules",
+      "status": "pass",
+      "detail": "Dependencies appear installed."
+    },
+    {
+      "id": "vite.config.ts",
+      "status": "pass",
+      "detail": "Vite config."
+    },
+    {
+      "id": "eslint.config.js",
+      "status": "pass",
+      "detail": "ESLint config."
+    },
+    {
+      "id": "tsconfig.json",
+      "status": "pass",
+      "detail": "TypeScript config."
+    },
+    {
+      "id": "contract",
+      "status": "pass",
+      "detail": ".harness/contract.yml"
+    },
+    {
+      "id": "evidence",
+      "status": "pass",
+      "detail": ".harness/evidence/runs"
+    },
+    {
+      "id": "friction",
+      "status": "pass",
+      "detail": ".harness/friction.jsonl"
+    }
+  ],
+  "evidence_path": ".harness/evidence/runs/2026-06-02T08-49-46-279Z",
+  "next_action": "Run ./harness verify before completion.",
+  "package_manager": {
+    "name": "npm",
+    "status": "detected"
+  }
+}

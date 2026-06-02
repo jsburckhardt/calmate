@@ -19,6 +19,10 @@ target: vscode
 
 <instructions>
 You MUST read the research brief at project/issues/<ISSUE_NUMBER>/research/00-research.md before any planning work.
+You MUST read .harness/contract.yml before planning verification tasks.
+You MUST read .harness/friction.jsonl before planning verification tasks.
+You MUST include harness commands in every test plan entry where applicable.
+You MUST include harness evidence expectations in implementation tasks.
 You MUST read the ADR template at project/architecture/ADR/ADR-0001-template.md before creating any ADR.
 You MUST read the core-component template at project/architecture/core-components/CORE-COMPONENT-0001-template.md before creating any core-component.
 You MUST read the decision log at project/architecture/ADR/DECISION-LOG.md before creating any ADR or core-component.
@@ -58,6 +62,8 @@ CORE_COMPONENT_TEMPLATE_PATH: "project/architecture/core-components/CORE-COMPONE
 DECISION_LOG_PATH: "project/architecture/ADR/DECISION-LOG.md"
 ADR_DIR: "project/architecture/ADR"
 CORE_COMPONENT_DIR: "project/architecture/core-components"
+HARNESS_CONTRACT_PATH: ".harness/contract.yml"
+HARNESS_FRICTION_PATH: ".harness/friction.jsonl"
 ADR_PATTERN: "ADR-####-slug.md"
 CORE_COMPONENT_PATTERN: "CORE-COMPONENT-####-slug.md"
 TASK_BREAKDOWN_PATH: "project/issues/<ISSUE_NUMBER>/plan/02-task-breakdown.md"
@@ -131,11 +137,15 @@ WHERE:
 ## Core-Components Created
 <CORE_COMPONENT_LIST>
 
+## Harness Inputs
+<HARNESS_INPUTS>
+
 ## Implementation Tasks
 <TASK_OUTLINE>
 WHERE:
 - <ADR_LIST> is Markdown.
 - <CORE_COMPONENT_LIST> is Markdown.
+- <HARNESS_INPUTS> is Markdown.
 - <RESEARCH_PATH> is Path.
 - <TASK_OUTLINE> is Markdown.
 - <TITLE> is String.
@@ -148,6 +158,7 @@ WHERE:
 - **Status:** <STATUS>
 - **Complexity:** <COMPLEXITY>
 - **Dependencies:** <DEPENDENCIES>
+- **Harness Validation:** <HARNESS_VALIDATION>
 - **Related ADRs:** <RELATED_ADRS>
 - **Related Core-Components:** <RELATED_CORE_COMPONENTS>
 
@@ -163,6 +174,7 @@ WHERE:
 - <ACCEPTANCE_CRITERIA> is Markdown.
 - <COMPLEXITY> is String.
 - <DEPENDENCIES> is String.
+- <HARNESS_VALIDATION> is String.
 - <DESCRIPTION> is Markdown.
 - <RELATED_ADRS> is String.
 - <RELATED_CORE_COMPONENTS> is String.
@@ -177,6 +189,7 @@ WHERE:
 
 - **Type:** <TEST_TYPE>
 - **Task:** <TASK_REF>
+- **Harness Command:** <HARNESS_COMMAND>
 - **Priority:** <PRIORITY>
 
 ### Setup
@@ -189,6 +202,7 @@ WHERE:
 <EXPECTED_RESULT>
 WHERE:
 - <EXPECTED_RESULT> is Markdown.
+- <HARNESS_COMMAND> is String.
 - <PRIORITY> is String.
 - <SETUP> is Markdown.
 - <STEPS> is Markdown.
@@ -212,6 +226,8 @@ RELEVANT_ADRS: []
 RELEVANT_CORE_COMPONENTS: []
 TASKS: []
 TESTS: []
+HARNESS_CONTRACT: ""
+HARNESS_FRICTION: ""
 ARCHITECTURE_COMPLETE: false
 BREAKDOWN_COMPLETE: false
 TEST_PLAN_COMPLETE: false
@@ -246,6 +262,10 @@ USE `read/readFile` where: filePath=CORE_COMPONENT_TEMPLATE_PATH
 CAPTURE CORE_COMPONENT_TEMPLATE from `read/readFile`
 USE `read/readFile` where: filePath=DECISION_LOG_PATH
 CAPTURE DECISION_LOG from `read/readFile`
+USE `read/readFile` where: filePath=HARNESS_CONTRACT_PATH
+CAPTURE HARNESS_CONTRACT from `read/readFile`
+USE `read/readFile` where: filePath=HARNESS_FRICTION_PATH
+CAPTURE HARNESS_FRICTION from `read/readFile`
 USE `search/fileSearch` where: pattern="project/architecture/ADR/ADR-*.md"
 CAPTURE EXISTING_ADRS from `search/fileSearch`
 SET NEXT_ADR_NUMBER := <NUM> (from "Agent Inference" using EXISTING_ADRS)
@@ -279,7 +299,7 @@ USE `edit/editFiles` where: filePath=DECISION_LOG_PATH
 </process>
 
 <process id="create-action-plan" name="Create the action plan for the issue">
-SET PLAN_CONTENT := <CONTENT> (from "Agent Inference" using RESEARCH_BRIEF, CREATED_ADRS, CREATED_CORE_COMPONENTS)
+SET PLAN_CONTENT := <CONTENT> (from "Agent Inference" using RESEARCH_BRIEF, CREATED_ADRS, CREATED_CORE_COMPONENTS, HARNESS_CONTRACT, HARNESS_FRICTION)
 USE `edit/createDirectory` where: dirPath="project/issues/<ISSUE_NUMBER>/plan"
 USE `edit/createFile` where: content=PLAN_CONTENT, filePath="project/issues/<ISSUE_NUMBER>/plan/01-action-plan.md"
 SET ACTION_PLAN := PLAN_CONTENT (from "Agent Inference")
@@ -288,14 +308,14 @@ SET ACTION_PLAN := PLAN_CONTENT (from "Agent Inference")
 <process id="create-task-breakdown" name="Create the task breakdown document">
 SET RELEVANT_ADRS := <ADRS> (from "Agent Inference" using ACTION_PLAN, CREATED_ADRS)
 SET RELEVANT_CORE_COMPONENTS := <COMPONENTS> (from "Agent Inference" using ACTION_PLAN, CREATED_CORE_COMPONENTS)
-SET TASKS := <TASK_LIST> (from "Agent Inference" using ACTION_PLAN, RELEVANT_ADRS, RELEVANT_CORE_COMPONENTS)
+SET TASKS := <TASK_LIST> (from "Agent Inference" using ACTION_PLAN, RELEVANT_ADRS, RELEVANT_CORE_COMPONENTS, HARNESS_CONTRACT)
 SET BREAKDOWN_CONTENT := <CONTENT> (from "Agent Inference" using TASKS)
 USE `edit/createFile` where: content=BREAKDOWN_CONTENT, filePath="project/issues/<ISSUE_NUMBER>/plan/02-task-breakdown.md"
 SET BREAKDOWN_COMPLETE := true (from "Agent Inference")
 </process>
 
 <process id="create-test-plan" name="Create the test plan document">
-SET TESTS := <TEST_LIST> (from "Agent Inference" using TASKS, RELEVANT_ADRS, RELEVANT_CORE_COMPONENTS)
+SET TESTS := <TEST_LIST> (from "Agent Inference" using TASKS, RELEVANT_ADRS, RELEVANT_CORE_COMPONENTS, HARNESS_CONTRACT)
 SET TEST_PLAN_CONTENT := <CONTENT> (from "Agent Inference" using TESTS)
 USE `edit/createFile` where: content=TEST_PLAN_CONTENT, filePath="project/issues/<ISSUE_NUMBER>/plan/03-test-plan.md"
 SET TEST_PLAN_COMPLETE := true (from "Agent Inference")

@@ -27,6 +27,12 @@ agents:
 You MUST read AGENTS.md to understand the pipeline specification before starting.
 You MUST read project/architecture/ADR/DECISION-LOG.md to understand existing architectural decisions.
 You MUST inspect existing documentation under docs/ and project/ before dispatching any stage.
+You MUST run ./harness orient --json before dispatching any stage.
+You MUST run ./harness doctor --json before dispatching any stage.
+You MUST run ./harness status --json before dispatching any stage.
+You MUST pass harness context to every stage subagent.
+You MUST stop with PIPELINE_ERROR when harness doctor fails.
+You MUST include harness evidence in the completion report.
 You MUST use the GitHub issue number as the identifier before dispatching any stage.
 You MUST create the issue documentation folder structure under project/issues/<ISSUE_NUMBER>/ before dispatching the Research stage.
 You MUST execute pipeline stages in strict order: Research, Plan, Implement, Verify.
@@ -47,6 +53,8 @@ You MAY retry a failed stage once before stopping with an error report.
 AGENTS_MD_PATH: "AGENTS.md"
 DECISION_LOG_PATH: "project/architecture/ADR/DECISION-LOG.md"
 ISSUES_DIR: "project/issues"
+HARNESS_CONTRACT_PATH: ".harness/contract.yml"
+HARNESS_FRICTION_PATH: ".harness/friction.jsonl"
 STAGE_AGENTS: YAML<<
 - agent: research
   output: project/issues/<ISSUE_NUMBER>/research/00-research.md
@@ -146,6 +154,13 @@ VERIFY_RESULT: ""
 PR_URL: ""
 STAGE_RESULTS: []
 PIPELINE_STATUS: ""
+HARNESS_ORIENT: ""
+HARNESS_DOCTOR: ""
+HARNESS_STATUS: ""
+HARNESS_FRICTION: ""
+HARNESS_CONTRACT: ""
+HARNESS_EVIDENCE: ""
+HARNESS_READY: false
 RETRY_COUNT: 0
 </runtime>
 
@@ -156,6 +171,9 @@ RETRY_COUNT: 0
 <processes>
 <process id="justdoit-router" name="Drive task through all RPIV pipeline stages">
 RUN `init-pipeline`
+RUN `harness-preflight`
+IF PIPELINE_STATUS = "error":
+  RETURN: format="PIPELINE_ERROR", issue_number=ISSUE_NUMBER, failed_stage="harness-preflight", error_message="Harness preflight failed", details=HARNESS_DOCTOR, recovery="Fix harness doctor failures or record friction before rerunning RPIV"
 RUN `dispatch-research`
 IF PIPELINE_STATUS = "error":
   RETURN: format="PIPELINE_ERROR", issue_number=ISSUE_NUMBER, failed_stage=CURRENT_STAGE, error_message="Research stage failed", details=RESEARCH_RESULT, recovery="Review the error and retry with @research"
@@ -188,9 +206,27 @@ IF HAS_ACCEPTANCE_CRITERIA is false:
 SET PIPELINE_STATUS := "running" (from "Agent Inference")
 </process>
 
+<process id="harness-preflight" name="Run harness preflight and capture operating context">
+USE `execute/runInTerminal` where: command="./harness orient --json"
+CAPTURE HARNESS_ORIENT from `execute/runInTerminal`
+USE `execute/runInTerminal` where: command="./harness doctor --json"
+CAPTURE HARNESS_DOCTOR from `execute/runInTerminal`
+USE `execute/runInTerminal` where: command="./harness status --json"
+CAPTURE HARNESS_STATUS from `execute/runInTerminal`
+USE `execute/runInTerminal` where: command="./harness friction list --json"
+CAPTURE HARNESS_FRICTION from `execute/runInTerminal`
+USE `read/readFile` where: filePath=HARNESS_CONTRACT_PATH
+CAPTURE HARNESS_CONTRACT from `read/readFile`
+SET HARNESS_READY := <READY> (from "Agent Inference" using HARNESS_DOCTOR)
+SET HARNESS_EVIDENCE := <EVIDENCE_PATH> (from "Agent Inference" using HARNESS_DOCTOR, HARNESS_STATUS)
+IF HARNESS_READY is false:
+  SET PIPELINE_STATUS := "error" (from "Agent Inference")
+</process>
+
 <process id="dispatch-research" name="Dispatch the Research stage to the research agent">
 SET CURRENT_STAGE := "research" (from "Agent Inference")
-USE `agent/runSubagent` where: agent="research", prompt=TASK_DESCRIPTION
+SET RESEARCH_PROMPT := <PROMPT> (from "Agent Inference" using TASK_DESCRIPTION, HARNESS_ORIENT, HARNESS_DOCTOR, HARNESS_STATUS, HARNESS_FRICTION, HARNESS_CONTRACT)
+USE `agent/runSubagent` where: agent="research", prompt=RESEARCH_PROMPT
 CAPTURE RESEARCH_RESULT from `agent/runSubagent`
 SET PIPELINE_STATUS := <STATUS> (from "Agent Inference" using RESEARCH_RESULT)
 IF PIPELINE_STATUS != "error":
@@ -201,7 +237,7 @@ IF PIPELINE_STATUS != "error":
 
 <process id="dispatch-plan" name="Dispatch the Plan stage to the planner agent">
 SET CURRENT_STAGE := "plan" (from "Agent Inference")
-SET PLAN_PROMPT := <PROMPT> (from "Agent Inference" using ISSUE_NUMBER, RESEARCH_RESULT)
+SET PLAN_PROMPT := <PROMPT> (from "Agent Inference" using ISSUE_NUMBER, RESEARCH_RESULT, HARNESS_STATUS, HARNESS_FRICTION, HARNESS_CONTRACT)
 USE `agent/runSubagent` where: agent="planner", prompt=PLAN_PROMPT
 CAPTURE PLAN_RESULT from `agent/runSubagent`
 SET PIPELINE_STATUS := <STATUS> (from "Agent Inference" using PLAN_RESULT)
@@ -213,7 +249,7 @@ IF PIPELINE_STATUS != "error":
 
 <process id="dispatch-implement" name="Dispatch the Implement stage to the implementer agent">
 SET CURRENT_STAGE := "implement" (from "Agent Inference")
-SET IMPL_PROMPT := <PROMPT> (from "Agent Inference" using ISSUE_NUMBER, PLAN_RESULT)
+SET IMPL_PROMPT := <PROMPT> (from "Agent Inference" using ISSUE_NUMBER, PLAN_RESULT, HARNESS_STATUS, HARNESS_CONTRACT)
 USE `agent/runSubagent` where: agent="implementer", prompt=IMPL_PROMPT
 CAPTURE IMPLEMENT_RESULT from `agent/runSubagent`
 SET PIPELINE_STATUS := <STATUS> (from "Agent Inference" using IMPLEMENT_RESULT)
@@ -223,7 +259,7 @@ IF PIPELINE_STATUS != "error":
 
 <process id="dispatch-verify" name="Dispatch the Verify stage to the verifier agent">
 SET CURRENT_STAGE := "verify" (from "Agent Inference")
-SET VERIFY_PROMPT := <PROMPT> (from "Agent Inference" using ISSUE_NUMBER)
+SET VERIFY_PROMPT := <PROMPT> (from "Agent Inference" using ISSUE_NUMBER, HARNESS_EVIDENCE, HARNESS_STATUS, HARNESS_CONTRACT)
 USE `agent/runSubagent` where: agent="verifier", prompt=VERIFY_PROMPT
 CAPTURE VERIFY_RESULT from `agent/runSubagent`
 SET PIPELINE_STATUS := <STATUS> (from "Agent Inference" using VERIFY_RESULT)
@@ -234,6 +270,7 @@ IF PIPELINE_STATUS != "error":
 
 <process id="report-completion" name="Generate the final completion report">
 SET PIPELINE_STATUS := "complete" (from "Agent Inference")
+SET VERIFY_RESULT := <RESULT_WITH_HARNESS_EVIDENCE> (from "Agent Inference" using VERIFY_RESULT, HARNESS_EVIDENCE)
 </process>
 </processes>
 

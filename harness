@@ -1,0 +1,910 @@
+#!/usr/bin/env node
+
+import { spawn, spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import http from 'node:http';
+import path from 'node:path';
+import readline from 'node:readline';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
+const HARNESS_DIR = path.join(ROOT, '.harness');
+const CONTRACT_PATH = path.join(HARNESS_DIR, 'contract.yml');
+const EVIDENCE_DIR = path.join(HARNESS_DIR, 'evidence');
+const RUNS_DIR = path.join(EVIDENCE_DIR, 'runs');
+const LATEST_PATH = path.join(EVIDENCE_DIR, 'latest.json');
+const FRICTION_PATH = path.join(HARNESS_DIR, 'friction.jsonl');
+const README_PATH = path.join(HARNESS_DIR, 'README.md');
+const KEY_QUESTION = 'What did the agent have to infer that the harness should have proved?';
+const BOOT_URL = 'http://127.0.0.1:4173/';
+const BOOT_COMMAND = 'npm run dev -- --host 127.0.0.1 --port 4173 --strictPort';
+const EXIT = {
+  pass: 0,
+  failure: 1,
+  doctorFailure: 10,
+  notConfigured: 20,
+  verificationFailure: 30,
+  bootFailure: 40,
+  contractProblem: 50,
+  frictionRecorded: 60,
+};
+
+const IMPORTANT_COMMANDS = new Set([
+  'orient',
+  'doctor',
+  'lint',
+  'test',
+  'build',
+  'boot',
+  'verify',
+  'status',
+  'clean',
+]);
+
+const BOOLEAN_OPTIONS = new Set(['json', 'stream']);
+const BOOLEAN_VALUE_OPTIONS = new Set(['blocked']);
+const BOOLEAN_VALUES = new Set(['true', 'false', 'yes', 'no', '1', '0']);
+const FATAL_BOOT_LOG_PATTERNS = [
+  /error when starting dev server/i,
+  /failed to scan for dependencies/i,
+];
+
+function ensureDir(dirPath) {
+  fs.mkdirSync(dirPath, { recursive: true });
+}
+
+function readJson(filePath, fallback) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+function fileExists(relativePath) {
+  return fs.existsSync(path.join(ROOT, relativePath));
+}
+
+function commandExists(command) {
+  const check = process.platform === 'win32' ? 'where' : 'command';
+  const args = process.platform === 'win32' ? [command] : ['-v', command];
+  const result = spawnSync(check, args, { shell: process.platform !== 'win32', stdio: 'ignore' });
+  return result.status === 0;
+}
+
+function packageJson() {
+  return readJson(path.join(ROOT, 'package.json'), {});
+}
+
+function detectPackageManager() {
+  if (fileExists('package-lock.json')) {
+    return { name: 'npm', status: 'detected' };
+  }
+  if (fileExists('pnpm-lock.yaml')) {
+    return { name: 'pnpm', status: 'detected' };
+  }
+  if (fileExists('yarn.lock')) {
+    return { name: 'yarn', status: 'detected' };
+  }
+  if (fileExists('package.json')) {
+    return { name: 'npm', status: 'inferred' };
+  }
+  return { name: 'unknown', status: 'missing' };
+}
+
+function packageCommand(packageManager, scriptName) {
+  if (packageManager === 'pnpm') {
+    return `pnpm ${scriptName}`;
+  }
+  if (packageManager === 'yarn') {
+    return `yarn ${scriptName}`;
+  }
+  return `npm run ${scriptName}`;
+}
+
+function installCommand(packageManager) {
+  if (packageManager === 'pnpm') {
+    return 'pnpm install';
+  }
+  if (packageManager === 'yarn') {
+    return 'yarn install';
+  }
+  return 'npm install';
+}
+
+function detectStack(pkg) {
+  const allDeps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+  const stack = [];
+  if (allDeps.vite) stack.push('Vite');
+  if (allDeps.react) stack.push('React');
+  if (allDeps.typescript) stack.push('TypeScript');
+  if (allDeps.vitest) stack.push('Vitest');
+  if (allDeps.eslint) stack.push('ESLint');
+  if (allDeps.prettier) stack.push('Prettier');
+  if (allDeps.zod) stack.push('Zod');
+  return stack;
+}
+
+function detectProject() {
+  const pkg = packageJson();
+  const packageManager = detectPackageManager();
+  const scripts = pkg.scripts || {};
+  const commands = {
+    install: { command: installCommand(packageManager.name), status: packageManager.name === 'unknown' ? 'missing' : packageManager.status },
+    check_config: scripts['check:config']
+      ? { command: packageCommand(packageManager.name, 'check:config'), status: 'detected' }
+      : { command: '', status: 'not_configured' },
+    lint: scripts.lint
+      ? { command: packageCommand(packageManager.name, 'lint'), status: 'detected' }
+      : { command: '', status: 'not_configured' },
+    test: scripts.test
+      ? { command: packageCommand(packageManager.name, 'test'), status: 'detected' }
+      : { command: '', status: 'not_configured' },
+    build: scripts.build
+      ? { command: packageCommand(packageManager.name, 'build'), status: 'detected' }
+      : { command: '', status: 'not_configured' },
+    boot: scripts.dev
+      ? { command: BOOT_COMMAND, readiness: { type: 'http', url: BOOT_URL, status: 'inferred' }, status: 'inferred' }
+      : { command: '', readiness: { type: 'none', status: 'missing' }, status: 'not_configured' },
+    clean: scripts.clean
+      ? { command: packageCommand(packageManager.name, 'clean'), status: 'detected' }
+      : { command: '', status: 'not_configured' },
+  };
+
+  return {
+    name: pkg.name || path.basename(ROOT),
+    packageManager,
+    scripts,
+    stack: detectStack(pkg),
+    type: scripts.dev && fileExists('vite.config.ts') ? { value: 'web_app', status: 'inferred' } : { value: 'unknown', status: 'missing' },
+    language: fileExists('tsconfig.json') ? { value: 'TypeScript', status: 'detected' } : { value: 'unknown', status: 'missing' },
+    commands,
+  };
+}
+
+function configured(commandConfig) {
+  return commandConfig && commandConfig.command && commandConfig.status !== 'not_configured' && commandConfig.status !== 'missing';
+}
+
+function timestamp() {
+  return new Date().toISOString();
+}
+
+function safeTimestamp() {
+  return timestamp().replace(/[:.]/g, '-');
+}
+
+function createRunDir(command) {
+  ensureDir(RUNS_DIR);
+  const runDir = path.join(RUNS_DIR, safeTimestamp());
+  ensureDir(runDir);
+  writeJson(path.join(runDir, 'run.json'), {
+    command,
+    root: ROOT,
+    started_at: timestamp(),
+  });
+  return runDir;
+}
+
+function relativeToRoot(filePath) {
+  if (!filePath) {
+    return '';
+  }
+  return path.relative(ROOT, filePath).replace(/\\/g, '/');
+}
+
+function writeJson(filePath, value) {
+  ensureDir(path.dirname(filePath));
+  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function writeText(filePath, value) {
+  ensureDir(path.dirname(filePath));
+  fs.writeFileSync(filePath, value);
+}
+
+function updateLatest(runDir, result) {
+  writeJson(LATEST_PATH, {
+    command: result.command,
+    evidence_path: relativeToRoot(runDir),
+    status: result.status,
+    updated_at: timestamp(),
+    verdict: result.verdict,
+  });
+}
+
+function result(command, status, verdict, checks, evidencePath, nextAction, extra = {}) {
+  return {
+    command,
+    status,
+    verdict,
+    checks,
+    evidence_path: evidencePath || '',
+    next_action: nextAction || '',
+    ...extra,
+  };
+}
+
+function exitCodeFor(resultValue) {
+  if (resultValue.verdict === 'pass') {
+    return EXIT.pass;
+  }
+  if (resultValue.status === 'not_configured' || resultValue.verdict === 'unknown') {
+    return EXIT.notConfigured;
+  }
+  if (resultValue.command === 'doctor') {
+    return EXIT.doctorFailure;
+  }
+  if (resultValue.command === 'verify') {
+    return EXIT.verificationFailure;
+  }
+  if (resultValue.command === 'boot') {
+    return EXIT.bootFailure;
+  }
+  if (resultValue.command === 'contract') {
+    return EXIT.contractProblem;
+  }
+  return EXIT.failure;
+}
+
+function parseArgs(argv) {
+  const positional = [];
+  const options = {};
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--json') {
+      options.json = true;
+      continue;
+    }
+    if (arg.startsWith('--')) {
+      const withoutPrefix = arg.slice(2);
+      const [rawKey, inlineValue] = withoutPrefix.split(/=(.*)/s, 2);
+      const key = rawKey.replace(/-([a-z])/g, (_match, letter) => letter.toUpperCase());
+      if (inlineValue !== undefined) {
+        options[key] = inlineValue;
+      } else if (BOOLEAN_OPTIONS.has(key)) {
+        options[key] = true;
+      } else if (BOOLEAN_VALUE_OPTIONS.has(key)) {
+        const nextValue = argv[index + 1];
+        if (nextValue && !nextValue.startsWith('--') && BOOLEAN_VALUES.has(nextValue.toLowerCase())) {
+          options[key] = nextValue;
+          index += 1;
+        } else {
+          options[key] = true;
+        }
+      } else if (argv[index + 1] && !argv[index + 1].startsWith('--')) {
+        options[key] = argv[index + 1];
+        index += 1;
+      } else {
+        options[key] = true;
+      }
+      continue;
+    }
+    positional.push(arg);
+  }
+  return { positional, options };
+}
+
+function printResult(resultValue, options = {}) {
+  if (options.json) {
+    console.log(JSON.stringify(resultValue, null, 2));
+    return;
+  }
+  console.log(`[${resultValue.verdict}] ${resultValue.command}`);
+  if (resultValue.status && resultValue.status !== resultValue.verdict) {
+    console.log(`status: ${resultValue.status}`);
+  }
+  if (resultValue.summary) {
+    console.log(resultValue.summary);
+  }
+  if (Array.isArray(resultValue.checks) && resultValue.checks.length > 0) {
+    console.log('checks:');
+    for (const check of resultValue.checks) {
+      const detail = check.detail ? ` - ${check.detail}` : '';
+      const exitCode = Number.isInteger(check.exit_code) ? ` (exit ${check.exit_code})` : '';
+      console.log(`- ${check.id}: ${check.status}${exitCode}${detail}`);
+    }
+  }
+  if (resultValue.evidence_path) {
+    console.log(`evidence: ${resultValue.evidence_path}`);
+  }
+  if (resultValue.next_action) {
+    console.log(`next: ${resultValue.next_action}`);
+  }
+}
+
+function printOrient(resultValue, options = {}) {
+  if (options.json) {
+    console.log(JSON.stringify(resultValue, null, 2));
+    return;
+  }
+  const project = resultValue.project;
+  console.log(`[${resultValue.verdict}] orient`);
+  console.log(`project: ${project.name}`);
+  console.log(`type: ${project.type.value} (${project.type.status})`);
+  console.log(`language: ${project.language.value} (${project.language.status})`);
+  console.log(`package manager: ${project.packageManager.name} (${project.packageManager.status})`);
+  console.log(`stack: ${project.stack.length ? project.stack.join(', ') : 'unknown'}`);
+  console.log('important files:');
+  for (const importantFile of resultValue.important_files) {
+    console.log(`- ${importantFile.path}: ${importantFile.exists ? 'present' : 'missing'}`);
+  }
+  console.log('available harness commands:');
+  for (const command of resultValue.available_commands) {
+    const wrapped = command.command ? ` -> ${command.command}` : '';
+    console.log(`- ${command.name}: ${command.status}${wrapped}`);
+  }
+  console.log(`evidence: ${relativeToRoot(EVIDENCE_DIR)}`);
+  console.log(`friction: ${relativeToRoot(FRICTION_PATH)}`);
+}
+
+function printHelp(options = {}) {
+  const project = detectProject();
+  const commands = [
+    { name: 'help', description: 'Show harness commands.' },
+    { name: 'orient', description: 'Explain the repo and operating surface.' },
+    { name: 'doctor', description: 'Check whether the repo is ready to operate.' },
+    { name: 'install', description: 'Run the detected install command.' },
+    { name: 'check_config', description: 'Run the detected config validation command.' },
+    { name: 'lint', description: 'Run the detected lint command.' },
+    { name: 'test', description: 'Run the detected test command.' },
+    { name: 'build', description: 'Run the detected build command.' },
+    { name: 'boot', description: 'Run the inferred Vite boot readiness check.' },
+    { name: 'verify', description: 'Run doctor, lint, test, build, and boot.' },
+    { name: 'status', description: 'Show harness state and latest evidence.' },
+    { name: 'friction add', description: 'Record an inference the harness should have proved.' },
+    { name: 'friction list', description: 'Show recent friction entries.' },
+  ];
+  const resultValue = result('help', 'pass', 'pass', [], '', 'Run ./harness orient to understand this repo.', {
+    commands,
+    project: project.name,
+  });
+  if (options.json) {
+    console.log(JSON.stringify(resultValue, null, 2));
+    return EXIT.pass;
+  }
+  console.log('CalMate harness');
+  console.log('Usage: ./harness <command> [--json]');
+  console.log('');
+  for (const command of commands) {
+    console.log(`  ${command.name.padEnd(14)} ${command.description}`);
+  }
+  console.log('');
+  console.log('Completion rule: ./harness verify');
+  return EXIT.pass;
+}
+
+function orient(options = {}) {
+  const project = detectProject();
+  const importantFiles = [
+    'README.md',
+    'package.json',
+    'package-lock.json',
+    'vite.config.ts',
+    'eslint.config.js',
+    'tsconfig.json',
+    '.harness/contract.yml',
+    '.harness/friction.jsonl',
+  ].map((filePath) => ({ path: filePath, exists: fileExists(filePath) }));
+  const availableCommands = [
+    { name: 'help', command: './harness help', status: 'detected' },
+    { name: 'orient', command: './harness orient', status: 'detected' },
+    { name: 'doctor', command: './harness doctor', status: 'detected' },
+    ...Object.entries(project.commands).map(([name, config]) => ({ name, command: config.command, status: config.status })),
+    { name: 'verify', command: './harness verify', status: 'detected' },
+    { name: 'status', command: './harness status', status: 'detected' },
+    { name: 'friction add', command: './harness friction add', status: 'detected' },
+    { name: 'friction list', command: './harness friction list', status: 'detected' },
+  ];
+  const checks = importantFiles.map((file) => ({
+    id: file.path,
+    status: file.exists ? 'pass' : 'missing',
+  }));
+  const resultValue = result('orient', 'pass', 'pass', checks, '', 'Run ./harness doctor before changing code.', {
+    available_commands: availableCommands,
+    important_files: importantFiles,
+    project,
+  });
+  printOrient(resultValue, options);
+  return EXIT.pass;
+}
+
+function doctor(options = {}, context = {}) {
+  const runDir = context.runDir || createRunDir('doctor');
+  const project = detectProject();
+  const packageManagerName = project.packageManager.name;
+  const checks = [
+    { id: 'node', status: commandExists('node') ? 'pass' : 'fail', detail: 'Node.js runtime is required.' },
+    { id: packageManagerName, status: commandExists(packageManagerName) ? 'pass' : 'fail', detail: `${packageManagerName} package manager is required.` },
+    { id: 'package.json', status: fileExists('package.json') ? 'pass' : 'fail', detail: 'Project manifest.' },
+    { id: 'package-lock.json', status: fileExists('package-lock.json') ? 'pass' : 'missing', detail: 'npm lockfile.' },
+    { id: 'node_modules', status: fileExists('node_modules') ? 'pass' : 'fail', detail: 'Dependencies appear installed.' },
+    { id: 'vite.config.ts', status: fileExists('vite.config.ts') ? 'pass' : 'missing', detail: 'Vite config.' },
+    { id: 'eslint.config.js', status: fileExists('eslint.config.js') ? 'pass' : 'missing', detail: 'ESLint config.' },
+    { id: 'tsconfig.json', status: fileExists('tsconfig.json') ? 'pass' : 'missing', detail: 'TypeScript config.' },
+    { id: 'contract', status: fs.existsSync(CONTRACT_PATH) ? 'pass' : 'fail', detail: relativeToRoot(CONTRACT_PATH) },
+    { id: 'evidence', status: fs.existsSync(RUNS_DIR) ? 'pass' : 'fail', detail: relativeToRoot(RUNS_DIR) },
+    { id: 'friction', status: fs.existsSync(FRICTION_PATH) ? 'pass' : 'fail', detail: relativeToRoot(FRICTION_PATH) },
+  ];
+  const hardFailures = checks.filter((check) => check.status === 'fail');
+  const softMissing = checks.filter((check) => check.status === 'missing');
+  const verdict = hardFailures.length ? 'fail' : softMissing.length ? 'degraded' : 'pass';
+  const status = verdict;
+  const nextAction = hardFailures.length
+    ? 'Install missing tools or dependencies, then rerun ./harness doctor.'
+    : softMissing.length
+      ? 'Review missing optional config, then continue if acceptable.'
+      : 'Run ./harness verify before completion.';
+  const resultValue = result('doctor', status, verdict, checks, relativeToRoot(runDir), nextAction, {
+    package_manager: project.packageManager,
+  });
+  writeJson(path.join(runDir, 'doctor.json'), resultValue);
+  updateLatest(runDir, resultValue);
+  if (!context.quiet) {
+    printResult(resultValue, options);
+  }
+  return resultValue;
+}
+
+function runShell(commandName, command, runDir, options = {}) {
+  return new Promise((resolve) => {
+    const logPath = path.join(runDir, `${commandName}.log`);
+    const logStream = fs.createWriteStream(logPath, { flags: 'a' });
+    const startedAt = timestamp();
+    logStream.write(`$ ${command}\n`);
+    const child = spawn(command, {
+      cwd: ROOT,
+      env: { ...process.env, CI: process.env.CI || '1' },
+      shell: true,
+    });
+    child.stdout.on('data', (data) => {
+      logStream.write(data);
+      if (options.stream) process.stdout.write(data);
+    });
+    child.stderr.on('data', (data) => {
+      logStream.write(data);
+      if (options.stream) process.stderr.write(data);
+    });
+    child.on('close', (exitCode) => {
+      const completedAt = timestamp();
+      logStream.write(`\nexit_code=${exitCode}\n`);
+      logStream.end(() => {
+        resolve({
+          completed_at: completedAt,
+          exit_code: exitCode,
+          log_path: logPath,
+          started_at: startedAt,
+        });
+      });
+    });
+  });
+}
+
+async function wrappedCommand(commandName, options = {}, context = {}) {
+  const project = detectProject();
+  const config = project.commands[commandName];
+  const runDir = context.runDir || createRunDir(commandName);
+  if (!configured(config)) {
+    const resultValue = result(commandName, 'not_configured', 'unknown', [{ id: commandName, status: 'not_configured' }], relativeToRoot(runDir), `Configure ${commandName} in package.json or .harness/contract.yml.`);
+    writeJson(path.join(runDir, `${commandName}.json`), resultValue);
+    updateLatest(runDir, resultValue);
+    if (!context.quiet) printResult(resultValue, options);
+    return resultValue;
+  }
+  const execution = await runShell(commandName, config.command, runDir, { stream: options.stream });
+  const passed = execution.exit_code === 0;
+  const checks = [{
+    evidence: `${commandName}.log`,
+    exit_code: execution.exit_code,
+    id: commandName,
+    status: passed ? 'pass' : 'fail',
+  }];
+  const resultValue = result(
+    commandName,
+    passed ? 'pass' : 'fail',
+    passed ? 'pass' : 'fail',
+    checks,
+    relativeToRoot(runDir),
+    passed ? 'Continue with ./harness verify when ready.' : `Inspect ${relativeToRoot(execution.log_path)}, fix ${commandName}, then rerun ./harness ${commandName}.`,
+    {
+      command_line: config.command,
+      completed_at: execution.completed_at,
+      started_at: execution.started_at,
+    },
+  );
+  writeJson(path.join(runDir, `${commandName}.json`), resultValue);
+  updateLatest(runDir, resultValue);
+  if (!context.quiet) printResult(resultValue, options);
+  return resultValue;
+}
+
+function fatalBootLogMatch(output) {
+  const plainOutput = output.replace(/\u001b\[[0-9;]*m/g, '');
+  const match = FATAL_BOOT_LOG_PATTERNS.find((pattern) => pattern.test(plainOutput));
+  return match ? match.source : '';
+}
+
+function probe(url) {
+  return new Promise((resolve) => {
+    const request = http.get(url, { timeout: 1000 }, (response) => {
+      response.resume();
+      resolve({
+        ok: response.statusCode >= 200 && response.statusCode < 300,
+        statusCode: response.statusCode,
+      });
+    });
+    request.on('timeout', () => {
+      request.destroy();
+      resolve({ ok: false, statusCode: null });
+    });
+    request.on('error', () => resolve({ ok: false, statusCode: null }));
+  });
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function stopProcess(child, signal = 'SIGTERM') {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return;
+  }
+  try {
+    if (process.platform !== 'win32') {
+      process.kill(-child.pid, signal);
+    } else {
+      child.kill(signal);
+    }
+  } catch (_error) {
+    try {
+      child.kill('SIGTERM');
+    } catch (_innerError) {
+      return;
+    }
+  }
+}
+
+async function boot(options = {}, context = {}) {
+  const project = detectProject();
+  const config = project.commands.boot;
+  const runDir = context.runDir || createRunDir('boot');
+  if (!configured(config)) {
+    const resultValue = result('boot', 'not_configured', 'unknown', [{ id: 'boot', status: 'not_configured' }], relativeToRoot(runDir), 'Add a boot command and readiness check to .harness/contract.yml.');
+    writeJson(path.join(runDir, 'boot.json'), resultValue);
+    updateLatest(runDir, resultValue);
+    if (!context.quiet) printResult(resultValue, options);
+    return resultValue;
+  }
+
+  const logPath = path.join(runDir, 'boot.log');
+  const logStream = fs.createWriteStream(logPath, { flags: 'a' });
+  const startedAt = timestamp();
+  logStream.write(`$ ${config.command}\n`);
+  const child = spawn(config.command, {
+    cwd: ROOT,
+    detached: process.platform !== 'win32',
+    env: { ...process.env, CI: process.env.CI || '1' },
+    shell: true,
+  });
+  let exitCode = null;
+  let closed = false;
+  let bootOutput = '';
+  child.stdout.on('data', (data) => {
+    bootOutput += data.toString();
+    logStream.write(data);
+    if (options.stream) process.stdout.write(data);
+  });
+  child.stderr.on('data', (data) => {
+    bootOutput += data.toString();
+    logStream.write(data);
+    if (options.stream) process.stderr.write(data);
+  });
+  child.on('close', (code) => {
+    exitCode = code;
+    closed = true;
+  });
+
+  let ready = false;
+  const timeoutAt = Date.now() + 20000;
+  let readinessStatusCode = null;
+  while (Date.now() < timeoutAt) {
+    const probeResult = await probe(BOOT_URL);
+    ready = probeResult.ok;
+    readinessStatusCode = probeResult.statusCode;
+    if (ready) break;
+    if (closed) break;
+    await sleep(500);
+  }
+  if (ready) {
+    await sleep(2000);
+  }
+  const fatalBootPattern = fatalBootLogMatch(bootOutput);
+  stopProcess(child, 'SIGINT');
+  await sleep(500);
+  logStream.write(`\nreadiness_url=${BOOT_URL}\nreadiness_status_code=${readinessStatusCode === null ? '' : readinessStatusCode}\nready=${ready}\nfatal_boot_pattern=${fatalBootPattern}\nexit_code=${exitCode === null ? '' : exitCode}\n`);
+  await new Promise((resolve) => logStream.end(resolve));
+
+  const passed = ready && !fatalBootPattern;
+  const checks = [{
+    evidence: 'boot.log',
+    exit_code: exitCode,
+    id: 'boot-readiness',
+    status: passed ? 'pass' : 'fail',
+    fatal_pattern: fatalBootPattern,
+    status_code: readinessStatusCode,
+    url: BOOT_URL,
+  }];
+  const resultValue = result(
+    'boot',
+    passed ? 'pass' : 'fail',
+    passed ? 'pass' : 'fail',
+    checks,
+    relativeToRoot(runDir),
+    passed ? 'Boot readiness proved by a 2xx root route response and clean startup log.' : `Inspect ${relativeToRoot(logPath)}, then fix the boot path or readiness check.`,
+    {
+      command_line: config.command,
+      completed_at: timestamp(),
+      fatal_boot_pattern: fatalBootPattern,
+      readiness_url: BOOT_URL,
+      readiness_status_code: readinessStatusCode,
+      started_at: startedAt,
+    },
+  );
+  writeJson(path.join(runDir, 'boot.json'), resultValue);
+  updateLatest(runDir, resultValue);
+  if (!context.quiet) printResult(resultValue, options);
+  return resultValue;
+}
+
+function latestEvidence() {
+  return readJson(LATEST_PATH, null);
+}
+
+function frictionEntries() {
+  if (!fs.existsSync(FRICTION_PATH)) {
+    return [];
+  }
+  return fs.readFileSync(FRICTION_PATH, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch (_error) {
+        return { malformed: true, raw: line };
+      }
+    });
+}
+
+function status(options = {}) {
+  const project = detectProject();
+  const latest = latestEvidence();
+  const friction = frictionEntries();
+  const availableCommands = Object.entries(project.commands).map(([name, config]) => ({
+    command: config.command,
+    name,
+    status: config.status,
+  }));
+  const missingChecks = availableCommands.filter((command) => command.status === 'not_configured' || command.status === 'missing');
+  const checks = [
+    { id: 'contract', status: fs.existsSync(CONTRACT_PATH) ? 'pass' : 'fail' },
+    { id: 'evidence', status: fs.existsSync(RUNS_DIR) ? 'pass' : 'fail' },
+    { id: 'friction', status: fs.existsSync(FRICTION_PATH) ? 'pass' : 'fail' },
+  ];
+  const resultValue = result('status', checks.every((check) => check.status === 'pass') ? 'pass' : 'fail', checks.every((check) => check.status === 'pass') ? 'pass' : 'fail', checks, latest ? latest.evidence_path : '', missingChecks.length ? 'Configure missing checks or keep their unknown status honest.' : 'Run ./harness verify before completion.', {
+    available_commands: availableCommands,
+    contract_exists: fs.existsSync(CONTRACT_PATH),
+    friction_count: friction.length,
+    known_missing_checks: missingChecks,
+    latest_evidence: latest,
+  });
+  if (options.json) {
+    console.log(JSON.stringify(resultValue, null, 2));
+    return exitCodeFor(resultValue);
+  }
+  printResult(resultValue, options);
+  console.log(`contract: ${resultValue.contract_exists ? 'present' : 'missing'}`);
+  console.log(`latest evidence: ${latest ? latest.evidence_path : 'none'}`);
+  console.log(`friction count: ${friction.length}`);
+  console.log('available commands:');
+  for (const command of availableCommands) {
+    const wrapped = command.command ? ` -> ${command.command}` : '';
+    console.log(`- ${command.name}: ${command.status}${wrapped}`);
+  }
+  if (missingChecks.length) {
+    console.log('known missing checks:');
+    for (const missing of missingChecks) {
+      console.log(`- ${missing.name}: ${missing.status}`);
+    }
+  }
+  return exitCodeFor(resultValue);
+}
+
+async function verify(options = {}) {
+  const runDir = createRunDir('verify');
+  const project = detectProject();
+  const sequence = ['doctor', 'lint', 'test', 'build', 'boot'].filter((command) => command === 'doctor' || configured(project.commands[command]));
+  const checkResults = [];
+  for (const command of sequence) {
+    if (command === 'doctor') {
+      checkResults.push(doctor({}, { quiet: true, runDir }));
+    } else if (command === 'boot') {
+      checkResults.push(await boot({}, { quiet: true, runDir }));
+    } else {
+      checkResults.push(await wrappedCommand(command, {}, { quiet: true, runDir }));
+    }
+  }
+  const checks = checkResults.map((check) => ({
+    evidence: check.command === 'doctor' ? 'doctor.json' : `${check.command}.log`,
+    exit_code: check.checks && check.checks[0] ? check.checks[0].exit_code : undefined,
+    id: check.command,
+    status: check.verdict,
+  }));
+  const hasFail = checkResults.some((check) => check.verdict === 'fail');
+  const hasUnknown = checkResults.some((check) => check.verdict === 'unknown');
+  const hasDegraded = checkResults.some((check) => check.verdict === 'degraded');
+  const verdict = hasFail ? 'fail' : hasUnknown ? 'unknown' : hasDegraded ? 'degraded' : 'pass';
+  const nextAction = verdict === 'pass'
+    ? 'Verification passed. Evidence is authoritative.'
+    : verdict === 'degraded'
+      ? 'Review degraded checks, then rerun ./harness verify if the missing checks must be enforced.'
+      : verdict === 'unknown'
+        ? 'Configure unknown checks, then rerun ./harness verify.'
+        : 'Fix failing checks, then rerun ./harness verify.';
+  const resultValue = result(
+    'verify',
+    verdict,
+    verdict,
+    checks,
+    relativeToRoot(runDir),
+    nextAction,
+    {
+      completed_at: timestamp(),
+      sequence,
+      started_at: readJson(path.join(runDir, 'run.json'), {}).started_at,
+    },
+  );
+  writeJson(path.join(runDir, 'verify.json'), resultValue);
+  writeText(path.join(runDir, 'summary.md'), summaryMarkdown(resultValue));
+  updateLatest(runDir, resultValue);
+  printResult(resultValue, options);
+  return exitCodeFor(resultValue);
+}
+
+function summaryMarkdown(resultValue) {
+  const lines = [
+    '# Harness Verification Summary',
+    '',
+    `- **Status:** ${resultValue.status}`,
+    `- **Verdict:** ${resultValue.verdict}`,
+    `- **Evidence:** ${resultValue.evidence_path}`,
+    '',
+    '## Checks',
+    '',
+  ];
+  for (const check of resultValue.checks) {
+    lines.push(`- ${check.id}: ${check.status}${check.evidence ? ` (${check.evidence})` : ''}`);
+  }
+  lines.push('', '## Next Action', '', resultValue.next_action, '');
+  return lines.join('\n');
+}
+
+function prompt(question) {
+  if (!process.stdin.isTTY) {
+    return Promise.resolve('');
+  }
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(`${question}: `, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
+}
+
+async function frictionAdd(options = {}) {
+  ensureDir(HARNESS_DIR);
+  const inference = options.inference || await prompt('What did the agent have to infer');
+  const shouldProve = options.shouldProve || await prompt('What should the harness have proved');
+  const helpedBy = options.helpedBy || await prompt('What command, check, fixture, output, or error would have helped');
+  const severity = options.severity || await prompt('How severe was it');
+  const blockedAnswer = options.blocked !== undefined ? String(options.blocked) : await prompt('Was progress blocked');
+  if (!inference || !shouldProve || !helpedBy) {
+    const resultValue = result('friction add', 'fail', 'fail', [{ id: 'required-fields', status: 'fail' }], '', 'Provide --inference, --should-prove, and --helped-by.');
+    printResult(resultValue, options);
+    return EXIT.failure;
+  }
+  const entry = {
+    timestamp: timestamp(),
+    inference,
+    should_have_proved: shouldProve,
+    helpful_proof: helpedBy,
+    severity: severity || 'unknown',
+    blocked: ['true', 'yes', '1'].includes(String(blockedAnswer).toLowerCase()),
+    source: 'harness friction add',
+    key_question: KEY_QUESTION,
+  };
+  fs.appendFileSync(FRICTION_PATH, `${JSON.stringify(entry)}\n`);
+  const resultValue = result('friction add', 'pass', 'pass', [{ id: 'friction', status: 'recorded' }], relativeToRoot(FRICTION_PATH), 'Review recurring friction and promote it into harness checks.', { entry });
+  printResult(resultValue, options);
+  return EXIT.pass;
+}
+
+function frictionList(options = {}) {
+  const limit = Number.parseInt(options.limit || '10', 10);
+  const entries = frictionEntries();
+  const recent = entries.slice(-limit);
+  const resultValue = result('friction list', 'pass', 'pass', [{ id: 'friction-count', status: 'pass', detail: String(entries.length) }], relativeToRoot(FRICTION_PATH), entries.length ? 'Use repeated friction to improve .harness/contract.yml and ./harness checks.' : 'No friction recorded yet.', {
+    entries: recent,
+    total: entries.length,
+  });
+  if (options.json) {
+    console.log(JSON.stringify(resultValue, null, 2));
+    return EXIT.pass;
+  }
+  printResult(resultValue, options);
+  if (recent.length) {
+    for (const entry of recent) {
+      console.log(`- ${entry.timestamp}: ${entry.inference || entry.raw}`);
+      if (entry.should_have_proved) console.log(`  should prove: ${entry.should_have_proved}`);
+      if (entry.helpful_proof) console.log(`  would help: ${entry.helpful_proof}`);
+      if (entry.severity) console.log(`  severity: ${entry.severity}; blocked: ${entry.blocked}`);
+    }
+  }
+  return EXIT.pass;
+}
+
+async function main() {
+  ensureDir(HARNESS_DIR);
+  ensureDir(RUNS_DIR);
+  if (!fs.existsSync(FRICTION_PATH)) {
+    fs.writeFileSync(FRICTION_PATH, '');
+  }
+  const { positional, options } = parseArgs(process.argv.slice(2));
+  const command = positional[0] || 'help';
+  if (command === 'help' || command === '--help' || command === '-h') {
+    return printHelp(options);
+  }
+  if (command === 'orient') {
+    return orient(options);
+  }
+  if (command === 'doctor') {
+    const resultValue = doctor(options);
+    return exitCodeFor(resultValue);
+  }
+  if (['install', 'check_config', 'lint', 'test', 'build', 'clean'].includes(command)) {
+    const resultValue = await wrappedCommand(command, options);
+    return exitCodeFor(resultValue);
+  }
+  if (command === 'boot') {
+    const resultValue = await boot(options);
+    return exitCodeFor(resultValue);
+  }
+  if (command === 'verify') {
+    return verify(options);
+  }
+  if (command === 'status') {
+    return status(options);
+  }
+  if (command === 'friction') {
+    const subcommand = positional[1] || 'list';
+    if (subcommand === 'add') {
+      return frictionAdd(options);
+    }
+    if (subcommand === 'list') {
+      return frictionList(options);
+    }
+  }
+  const resultValue = result(command, 'not_configured', 'unknown', [{ id: command, status: 'unknown' }], '', 'Run ./harness help for supported commands.');
+  printResult(resultValue, options);
+  return EXIT.notConfigured;
+}
+
+main()
+  .then((code) => {
+    process.exitCode = code;
+  })
+  .catch((error) => {
+    console.error(`[fail] harness: ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = EXIT.failure;
+  });

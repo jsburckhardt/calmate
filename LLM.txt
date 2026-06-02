@@ -34,6 +34,7 @@ docs/README.md                                              — Application docu
 project/README.md                                             — Project documentation index
 project/architecture/README.md                                 — Architecture documentation index
 project/architecture/soft-factory-pipeline.excalidraw          — Pipeline diagram source
+project/architecture/soft-factory-pipeline-v2.excalidraw       — Pipeline diagram with harness steps, runs, and evidence loop
 project/architecture/ADR/ADR-0001-template.md                  — ADR template (read-only, copy to create new)
 project/architecture/ADR/ADR-0002-vite-react-typescript-dashboard.md — Tech stack decision for CalMate
 project/architecture/ADR/DECISION-LOG.md                       — Registry of all ADR and core-component decisions
@@ -45,4 +46,4 @@ project/architecture/core-components/CORE-COMPONENT-0005-ui-layout-responsivenes
 project/architecture/core-components/CORE-COMPONENT-0006-development-standards.md — Shared development standards
 project/architecture/core-components/README.md                 — Core-components index
 project/issues/README.md                                       — Issues index and canonical structure
-.github/soft-factory/verification.yml                          — Configured project verification commands
+.harness/contract.yml                                          — Harness verification contract

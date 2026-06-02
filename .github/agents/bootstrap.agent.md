@@ -45,8 +45,8 @@ You MUST update LLM.txt with any new project-specific file references.
 You MUST tailor .devcontainer/devcontainer.json to the chosen tech stack by removing unnecessary features.
 You MUST assign sequential ADR numbers starting from ADR-0002 using the pattern ADR-####-slug.md.
 You MUST assign sequential core-component numbers starting from CORE-COMPONENT-0002 using the pattern CORE-COMPONENT-####-slug.md.
-You MUST configure project verification commands and write them to `.github/soft-factory/verification.yml`.
-You MUST ask the user to confirm or customize the proposed verification commands before writing the config.
+You MUST configure project verification commands through `.harness/contract.yml`.
+You MUST ask the user to confirm or customize the proposed harness verification commands before writing the contract.
 You MUST NOT set up CI/CD pipelines or infrastructure.
 You MUST NOT make feature-level decisions; only foundational project decisions.
 You MUST NOT skip any user confirmation before writing files.
@@ -68,7 +68,7 @@ APP_DOCS_PATH: "docs/README.md"
 LLM_TXT_PATH: "LLM.txt"
 DEVCONTAINER_PATH: ".devcontainer/devcontainer.json"
 BOOTSTRAP_MARKER: "ADR-0002"
-VERIFICATION_CONFIG_PATH: ".github/soft-factory/verification.yml"
+HARNESS_CONTRACT_PATH: ".harness/contract.yml"
 TECH_STACK_INIT: YAML<<
 - language: python
   commands:
@@ -451,11 +451,11 @@ USE `edit/editFiles` where: filePath=DEVCONTAINER_PATH
 SET UPDATED_FILES := UPDATED_FILES + [DEVCONTAINER_PATH] (from "Agent Inference")
 </process>
 
-<process id="configure-verification" name="Write project verification config file">
-USE `edit/createDirectory` where: dirPath=".github/soft-factory"
-SET VERIFICATION_YAML := <CONTENT> (from "Agent Inference" using VERIFICATION_COMMANDS)
-USE `edit/createFile` where: content=VERIFICATION_YAML, filePath=VERIFICATION_CONFIG_PATH
-SET UPDATED_FILES := UPDATED_FILES + [VERIFICATION_CONFIG_PATH] (from "Agent Inference")
+<process id="configure-verification" name="Write harness verification contract">
+USE `edit/createDirectory` where: dirPath=".harness"
+SET HARNESS_CONTRACT := <CONTENT> (from "Agent Inference" using VERIFICATION_COMMANDS)
+USE `edit/createFile` where: content=HARNESS_CONTRACT, filePath=HARNESS_CONTRACT_PATH
+SET UPDATED_FILES := UPDATED_FILES + [HARNESS_CONTRACT_PATH] (from "Agent Inference")
 </process>
 </processes>
 

@@ -1,0 +1,7 @@
+{
+  "command": "verify",
+  "evidence_path": ".harness/evidence/runs/2026-06-02T12-50-43-600Z",
+  "status": "pass",
+  "updated_at": "2026-06-02T12:51:14.588Z",
+  "verdict": "pass"
+}

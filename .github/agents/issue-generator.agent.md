@@ -1,6 +1,6 @@
 ---
 name: issue-generator
-description: "Analyze codebase history for recurring pitfalls, draft a comprehensive GitHub issue, dispatch a rubber-duck subagent to critique it, then create the issue via gh."
+description: "Analyze codebase history and harness readiness for recurring pitfalls, draft a @justdoit-ready GitHub issue, dispatch a rubber-duck subagent to critique it, then create the issue via gh."
 tools:
   - search/codebase
   - search/textSearch
@@ -27,6 +27,8 @@ agents:
 <instructions>
 You MUST read AGENTS.md and project/architecture/ADR/DECISION-LOG.md before starting.
 You MUST read all existing issue documentation under project/issues/ to learn the established format.
+You MUST run ./harness orient --json, ./harness doctor --json, and ./harness status --json before drafting.
+You MUST stop with format:GENERATION_ERROR when ./harness doctor --json fails because @justdoit will halt before Research.
 You MUST run git history analysis to surface recurring fix patterns before drafting the issue.
 You MUST analyze closed issues and their post-PR fix commits to identify categories of missed work.
 You MUST include a "Known Pitfalls" section in every generated issue informed by KNOWN_PITFALLS.
@@ -34,7 +36,9 @@ You MUST structure every issue with all sections defined in ISSUE_SECTIONS.
 You MUST format every acceptance criterion as a markdown checkbox (`- [ ]` for unchecked).
 You MUST wrap the acceptance criteria list with `<!-- ACCEPTANCE_CRITERIA_START -->` and `<!-- ACCEPTANCE_CRITERIA_END -->` HTML comment markers so downstream agents can machine-parse them.
 You MUST place exactly one start marker and one end marker; only `- [ ]` checkbox list items may appear between them.
-You MUST group acceptance criteria under subheadings (e.g., **Core**, **Edge Cases**, **Testing**) inside the markers.
+You MUST encode acceptance criteria groups in checkbox text prefixes such as `Core:`, `Edge Cases:`, and `Testing:` instead of headings inside the markers.
+You MUST validate the draft issue body before rubber-duck review and before issue creation.
+You MUST verify the created issue remains @justdoit-ready by reading it back with gh issue view.
 You MUST match the style and depth of existing issues (see issues #3, #5, #7, #9 for reference).
 You MUST dispatch a rubber-duck subagent to critique the draft before creating the issue.
 You MUST incorporate rubber-duck feedback into the final issue before creation.
@@ -53,6 +57,17 @@ DECISION_LOG_PATH: "project/architecture/ADR/DECISION-LOG.md"
 ISSUES_DIR: "project/issues"
 MAX_REVISIONS: 2
 
+JUSTDOIT_CAVEATS: YAML<<
+- id: structured_acceptance_criteria
+  requirement: Acceptance criteria must use exactly one ACCEPTANCE_CRITERIA_START marker, exactly one ACCEPTANCE_CRITERIA_END marker, and unchecked `- [ ]` markdown checkbox items between them.
+- id: marker_body
+  requirement: No headings, prose, blank grouping labels, or non-checkbox list items may appear between the acceptance criteria markers.
+- id: harness_doctor
+  requirement: `./harness doctor --json` must pass before `@justdoit <ISSUE_NUMBER>` can dispatch Research.
+- id: issue_identifier
+  requirement: `@justdoit` is invoked with the created issue number or URL.
+>>
+
 ISSUE_SECTIONS: YAML<<
 - id: problem
   name: Problem
@@ -70,6 +85,10 @@ ISSUE_SECTIONS: YAML<<
   name: Known Pitfalls
   required: true
   purpose: Proactive warnings from historical post-PR fix patterns
+- id: pipeline_readiness
+  name: Pipeline Readiness
+  required: true
+  purpose: Summarize @justdoit prerequisites, current harness orient/doctor/status results, and any remaining preflight assumptions
 - id: api_endpoints
   name: New API Endpoints
   required: false
@@ -77,7 +96,7 @@ ISSUE_SECTIONS: YAML<<
 - id: acceptance_criteria
   name: Acceptance Criteria
   required: true
-  purpose: Markdown checkboxes (`- [ ]`) grouped by Core, Edge Cases, and Testing; wrapped with ACCEPTANCE_CRITERIA_START/END HTML comment markers
+  purpose: Unchecked markdown checkboxes (`- [ ]`) with group prefixes such as Core, Edge Cases, and Testing; wrapped with ACCEPTANCE_CRITERIA_START/END HTML comment markers
 - id: testing
   name: Testing
   required: true
@@ -144,6 +163,8 @@ You are a critical reviewer. Read the draft GitHub issue below and challenge it:
 4. Is the proposed solution specific enough for an implementer to follow?
 5. Are there unstated assumptions that should be explicit?
 6. Does the testing section cover unit, integration, and UI scenarios?
+7. Do acceptance criteria use exactly one marker pair and only unchecked `- [ ]` checkbox items between markers?
+8. Does the issue document @justdoit readiness, including current harness doctor status?
 
 Reply with a numbered list of issues found, or "APPROVED" if the draft is ready.
 >>
@@ -160,12 +181,16 @@ Reply with a numbered list of issues found, or "APPROVED" if the draft is ready.
 ### Rubber-Duck Review
 <REVIEW_SUMMARY>
 
+### JustDoIt Readiness
+<JUSTDOIT_READINESS_SUMMARY>
+
 ### Sections Included
 <SECTIONS_LIST>
 WHERE:
 - <ISSUE_NUMBER> is String.
 - <ISSUE_TITLE> is String.
 - <ISSUE_URL> is URI.
+- <JUSTDOIT_READINESS_SUMMARY> is String.
 - <REVIEW_SUMMARY> is String.
 - <SECTIONS_LIST> is String.
 </format>
@@ -203,13 +228,21 @@ WHERE:
 FEATURE_DESCRIPTION: ""
 HISTORY_ANALYSIS: ""
 HISTORY_OUTPUTS: []
+HARNESS_ORIENT: ""
+HARNESS_DOCTOR: ""
+HARNESS_STATUS: ""
+HARNESS_READY: false
 DRAFT_TITLE: ""
 DRAFT_BODY: ""
+AC_FORMAT_VALID: false
 RUBBER_DUCK_RESULT: ""
 RUBBER_DUCK_OK: false
 REVISION_COUNT: 0
 ISSUE_URL: ""
 ISSUE_NUMBER: ""
+ISSUE_VALIDATION_RESULT: ""
+ISSUE_JUSTDOIT_READY: false
+JUSTDOIT_READINESS_SUMMARY: ""
 </runtime>
 
 <triggers>
@@ -219,13 +252,25 @@ ISSUE_NUMBER: ""
 <processes>
 <process id="generate-issue" name="Generate a GitHub issue end-to-end">
 RUN `analyze-context`
+RUN `harness-preflight`
+IF HARNESS_READY is false:
+  RETURN: format="GENERATION_ERROR", failed_stage="Harness Preflight", error_message="./harness doctor --json failed; @justdoit would halt before Research", recovery="Fix harness doctor failures before generating a @justdoit-ready issue, then rerun issue-generator"
 RUN `analyze-history`
 RUN `draft-issue`
+RUN `validate-draft`
+IF AC_FORMAT_VALID is false:
+  RETURN: format="GENERATION_ERROR", failed_stage="Draft Validation", error_message="Draft issue acceptance criteria are not @justdoit-compatible", recovery="Revise the draft so there is exactly one marker pair and only unchecked checkbox items between markers"
 RUN `rubber-duck-review`
 IF RUBBER_DUCK_OK is false:
   RUN `revise-draft`
+RUN `validate-draft`
+IF AC_FORMAT_VALID is false:
+  RETURN: format="GENERATION_ERROR", failed_stage="Post-Review Draft Validation", error_message="Revised issue acceptance criteria are not @justdoit-compatible", recovery="Revise the draft so there is exactly one marker pair and only unchecked checkbox items between markers"
 RUN `create-issue`
-RETURN: format="ISSUE_CREATED", issue_title=DRAFT_TITLE, issue_url=ISSUE_URL, issue_number=ISSUE_NUMBER, review_summary=RUBBER_DUCK_RESULT, sections_list=ISSUE_SECTIONS
+RUN `validate-created-issue`
+IF ISSUE_JUSTDOIT_READY is false:
+  RETURN: format="GENERATION_ERROR", failed_stage="Created Issue Validation", error_message="Created issue does not meet @justdoit prerequisites", recovery="Update the issue body so acceptance criteria have exactly one marker pair and only unchecked checkbox items between markers"
+RETURN: format="ISSUE_CREATED", issue_title=DRAFT_TITLE, issue_url=ISSUE_URL, issue_number=ISSUE_NUMBER, justdoit_readiness_summary=JUSTDOIT_READINESS_SUMMARY, review_summary=RUBBER_DUCK_RESULT, sections_list=ISSUE_SECTIONS
 </process>
 
 <process id="analyze-context" name="Read project context and existing issues">
@@ -236,6 +281,17 @@ CAPTURE AGENTS_SPEC from `read/readFile`
 USE `read/readFile` where: filePath="LLM.txt"
 CAPTURE REPO_MAP from `read/readFile`
 SET FEATURE_DESCRIPTION := <DESC> (from "Agent Inference" using USER_INPUT)
+</process>
+
+<process id="harness-preflight" name="Capture @justdoit harness readiness">
+USE `execute/runInTerminal` where: command="./harness orient --json"
+CAPTURE HARNESS_ORIENT from `execute/runInTerminal`
+USE `execute/runInTerminal` where: command="./harness doctor --json"
+CAPTURE HARNESS_DOCTOR from `execute/runInTerminal`
+USE `execute/runInTerminal` where: command="./harness status --json"
+CAPTURE HARNESS_STATUS from `execute/runInTerminal`
+SET HARNESS_READY := <READY> (from "Agent Inference" using HARNESS_DOCTOR)
+SET JUSTDOIT_READINESS_SUMMARY := <SUMMARY> (from "Agent Inference" using HARNESS_ORIENT, HARNESS_DOCTOR, HARNESS_STATUS, JUSTDOIT_CAVEATS)
 </process>
 
 <process id="analyze-history" name="Run git history analysis for pitfall detection">
@@ -251,18 +307,23 @@ SET HISTORY_ANALYSIS := <ANALYSIS> (from "Agent Inference" using HISTORY_OUTPUTS
 
 <process id="draft-issue" name="Compose the issue body from context and history">
 SET DRAFT_TITLE := <TITLE> (from "Agent Inference" using FEATURE_DESCRIPTION)
-SET DRAFT_BODY := <BODY> (from "Agent Inference" using FEATURE_DESCRIPTION, HISTORY_ANALYSIS, ISSUE_SECTIONS, KNOWN_PITFALLS, DECISION_LOG)
+SET DRAFT_BODY := <BODY> (from "Agent Inference" using FEATURE_DESCRIPTION, HISTORY_ANALYSIS, ISSUE_SECTIONS, KNOWN_PITFALLS, DECISION_LOG, JUSTDOIT_CAVEATS, HARNESS_ORIENT, HARNESS_DOCTOR, HARNESS_STATUS)
+</process>
+
+<process id="validate-draft" name="Validate @justdoit-compatible issue body">
+SET AC_FORMAT_VALID := <VALID> (from "Agent Inference" using DRAFT_BODY, JUSTDOIT_CAVEATS)
+SET JUSTDOIT_READINESS_SUMMARY := <SUMMARY> (from "Agent Inference" using AC_FORMAT_VALID, HARNESS_DOCTOR, HARNESS_STATUS, JUSTDOIT_CAVEATS)
 </process>
 
 <process id="rubber-duck-review" name="Dispatch subagent to critique the draft">
-SET REVIEW_PROMPT := <PROMPT> (from "Agent Inference" using RUBBER_DUCK_PROMPT, DRAFT_TITLE, DRAFT_BODY)
+SET REVIEW_PROMPT := <PROMPT> (from "Agent Inference" using RUBBER_DUCK_PROMPT, DRAFT_TITLE, DRAFT_BODY, JUSTDOIT_CAVEATS, HARNESS_DOCTOR)
 USE `agent/runSubagent` where: prompt=REVIEW_PROMPT
 CAPTURE RUBBER_DUCK_RESULT from `agent/runSubagent`
 SET RUBBER_DUCK_OK := <IS_APPROVED> (from "Agent Inference" using RUBBER_DUCK_RESULT)
 </process>
 
 <process id="revise-draft" name="Incorporate rubber-duck feedback into the draft">
-SET DRAFT_BODY := <REVISED_BODY> (from "Agent Inference" using DRAFT_BODY, RUBBER_DUCK_RESULT, KNOWN_PITFALLS)
+SET DRAFT_BODY := <REVISED_BODY> (from "Agent Inference" using DRAFT_BODY, RUBBER_DUCK_RESULT, KNOWN_PITFALLS, JUSTDOIT_CAVEATS, HARNESS_DOCTOR)
 SET REVISION_COUNT := REVISION_COUNT + 1 (from "Agent Inference")
 RUN `rubber-duck-review`
 IF RUBBER_DUCK_OK is false AND REVISION_COUNT < MAX_REVISIONS:
@@ -278,8 +339,16 @@ CAPTURE CREATE_OUTPUT from `execute/runInTerminal`
 SET ISSUE_URL := <URL> (from "Agent Inference" using CREATE_OUTPUT)
 SET ISSUE_NUMBER := <NUMBER> (from "Agent Inference" using CREATE_OUTPUT)
 </process>
+
+<process id="validate-created-issue" name="Validate created issue can be handed to @justdoit">
+USE `execute/runInTerminal` where: command="gh issue view <ISSUE_NUMBER> --json title,body,url"
+CAPTURE ISSUE_VALIDATION_RESULT from `execute/runInTerminal`
+SET ISSUE_JUSTDOIT_READY := <READY> (from "Agent Inference" using ISSUE_VALIDATION_RESULT, HARNESS_READY, JUSTDOIT_CAVEATS)
+SET JUSTDOIT_READINESS_SUMMARY := <SUMMARY> (from "Agent Inference" using ISSUE_VALIDATION_RESULT, HARNESS_ORIENT, HARNESS_DOCTOR, HARNESS_STATUS, ISSUE_JUSTDOIT_READY, JUSTDOIT_CAVEATS)
+</process>
 </processes>
 
 <input>
 USER_INPUT is a feature request description or area of the codebase to investigate for issue generation.
+The generated issue MUST be suitable for @justdoit <ISSUE_NUMBER> unless generation fails with format:GENERATION_ERROR.
 </input>

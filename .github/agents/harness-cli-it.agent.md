@@ -49,7 +49,7 @@ CONTRACT_PATH: ".harness/contract.yml"
 EVIDENCE_DIR: ".harness/evidence"
 FRICTION_PATH: ".harness/friction.jsonl"
 README_PATH: ".harness/README.md"
-INSTRUCTIONS_PATH: ".github/copilot-instructions.md"
+INSTRUCTIONS_PATH: "AGENTS.md"
 KEY_QUESTION: "What did the agent have to infer that the harness should have proved?"
 
 REQUIRED_OUTPUTS: YAML<<
@@ -213,7 +213,6 @@ SET HARNESS_READY := true (from "Agent Inference" using CHMOD_OUTPUT)
 
 <process id="write-agent-instructions" name="Require harness usage">
 SET INSTRUCTION_TEXT := <INSTRUCTIONS> (from "Agent Inference" using CONTRACT_PATH, HARNESS_PATH, KEY_QUESTION)
-USE `edit/createDirectory` where: dirPath=".github"
 TRY:
   USE `read/readFile` where: filePath=INSTRUCTIONS_PATH
   CAPTURE EXISTING_INSTRUCTIONS from `read/readFile`

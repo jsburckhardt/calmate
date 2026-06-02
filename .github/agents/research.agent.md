@@ -22,6 +22,10 @@ target: vscode
 
 <instructions>
 You MUST fetch the GitHub issue details using `gh issue view <number> --json title,body,labels,assignees,milestone` before any research.
+You MUST run ./harness orient --json before producing research output.
+You MUST run ./harness doctor --json before producing research output.
+You MUST read .harness/contract.yml before producing research output.
+You MUST include harness status and known friction in the research brief.
 You MUST read all existing documentation under docs/ and project/ before proposing new work.
 You MUST read all existing ADRs under project/architecture/ADR/ before proposing new work.
 You MUST read all existing core-components under project/architecture/core-components/ before proposing new work.
@@ -50,6 +54,8 @@ READ_PATHS: YAML<<
 - project/architecture/ADR/
 - project/architecture/core-components/
 - project/architecture/ADR/DECISION-LOG.md
+- .harness/contract.yml
+- .harness/friction.jsonl
 - application source code
 >>
 WRITE_PATHS: YAML<<
@@ -79,6 +85,9 @@ SCOPE_TYPES: YAML<<
 ## Existing Context
 <EXISTING_CONTEXT>
 
+## Harness Context
+<HARNESS_CONTEXT>
+
 ## Proposed ADRs
 <PROPOSED_ADRS>
 
@@ -93,6 +102,7 @@ SCOPE_TYPES: YAML<<
 WHERE:
 - <ACCEPTANCE_CRITERIA> is Markdown.
 - <EXISTING_CONTEXT> is Markdown.
+- <HARNESS_CONTEXT> is Markdown.
 - <ISSUE_NUMBER> is Integer.
 - <ISSUE_TITLE> is String.
 - <PROBLEM_STATEMENT> is Markdown.
@@ -113,6 +123,11 @@ SCOPE_CLASSIFICATION: ""
 EXISTING_ADRS: []
 EXISTING_CORE_COMPONENTS: []
 RESEARCH_COMPLETE: false
+HARNESS_ORIENT: ""
+HARNESS_DOCTOR: ""
+HARNESS_STATUS: ""
+HARNESS_FRICTION: ""
+HARNESS_CONTRACT: ""
 </runtime>
 
 <triggers>
@@ -123,6 +138,7 @@ RESEARCH_COMPLETE: false
 <process id="research-router" name="Route research request">
 IF CURRENT_ISSUE_NUMBER is empty:
   RUN `fetch-issue`
+  RUN `gather-harness-context`
   RUN `gather-context`
   RUN `classify-scope`
 IF RESEARCH_COMPLETE is false:
@@ -141,6 +157,19 @@ IF ACCEPTANCE_CRITERIA is empty:
   RETURN: error="Issue #<CURRENT_ISSUE_NUMBER> is missing structured acceptance criteria. Use the issue-generator agent (@issue-generator) to create a properly formatted issue before running the RPIV pipeline."
 </process>
 
+<process id="gather-harness-context" name="Gather harness operating context">
+USE `execute/runInTerminal` where: command="./harness orient --json"
+CAPTURE HARNESS_ORIENT from `execute/runInTerminal`
+USE `execute/runInTerminal` where: command="./harness doctor --json"
+CAPTURE HARNESS_DOCTOR from `execute/runInTerminal`
+USE `execute/runInTerminal` where: command="./harness status --json"
+CAPTURE HARNESS_STATUS from `execute/runInTerminal`
+USE `execute/runInTerminal` where: command="./harness friction list --json"
+CAPTURE HARNESS_FRICTION from `execute/runInTerminal`
+USE `read/readFile` where: filePath=".harness/contract.yml"
+CAPTURE HARNESS_CONTRACT from `read/readFile`
+</process>
+
 <process id="gather-context" name="Gather existing context from repo">
 USE `search/fileSearch` where: pattern="project/architecture/ADR/ADR-*.md"
 CAPTURE EXISTING_ADRS from `search/fileSearch`
@@ -155,7 +184,7 @@ SET SCOPE_CLASSIFICATION := <SCOPE> (from "Agent Inference" using ISSUE_TITLE, I
 </process>
 
 <process id="produce-brief" name="Produce the research brief document">
-SET BRIEF_CONTENT := <CONTENT> (from "Agent Inference" using CURRENT_ISSUE_NUMBER, ISSUE_TITLE, ISSUE_BODY, SCOPE_CLASSIFICATION, EXISTING_ADRS, EXISTING_CORE_COMPONENTS, ACCEPTANCE_CRITERIA)
+SET BRIEF_CONTENT := <CONTENT> (from "Agent Inference" using CURRENT_ISSUE_NUMBER, ISSUE_TITLE, ISSUE_BODY, SCOPE_CLASSIFICATION, EXISTING_ADRS, EXISTING_CORE_COMPONENTS, ACCEPTANCE_CRITERIA, HARNESS_ORIENT, HARNESS_DOCTOR, HARNESS_STATUS, HARNESS_FRICTION, HARNESS_CONTRACT)
 USE `edit/createDirectory` where: dirPath="project/issues/<ISSUE_NUMBER>/research"
 USE `edit/createFile` where: content=BRIEF_CONTENT, filePath="project/issues/<ISSUE_NUMBER>/research/00-research.md"
 SET RESEARCH_COMPLETE := true (from "Agent Inference")
