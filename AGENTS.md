@@ -14,6 +14,11 @@ You MUST inspect existing repo code and documentation before proposing new work.
 You MUST NOT skip any stage in the pipeline.
 You MUST update the APS version badge in README.md and the APS_BADGE constant when the APS skill is upgraded.
 You MUST mark a PR review comment as resolved via the GitHub API after fixing the issue it raised.
+You MUST use ./harness as the primary operating surface.
+You MUST run ./harness orient and ./harness doctor before changing code.
+You MUST run ./harness verify before claiming work is complete.
+You MUST record friction with ./harness friction add when bypassing the harness or inferring unproved behavior.
+You MUST treat harness evidence as completion proof instead of agent confidence.
 </instructions>
 
 <constants>
@@ -277,7 +282,7 @@ harness-cli-it:
     - .harness/evidence/
     - .harness/friction.jsonl
     - .harness/README.md
-    - .github/copilot-instructions.md
+    - AGENTS.md
   templates: []
   guardrails:
     - must make ./harness the supported operating surface for humans and agents
@@ -286,7 +291,7 @@ harness-cli-it:
     - must support --json output for important commands
     - must write verify evidence under .harness/evidence/
     - must record each inference as a friction entry
-    - must update agent instructions to require ./harness usage
+    - must update AGENTS.md to require ./harness usage
     - must run ./harness verify before claiming completion
 issue-generator:
   file: .github/agents/issue-generator.agent.md

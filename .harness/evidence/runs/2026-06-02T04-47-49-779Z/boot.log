@@ -1,0 +1,23 @@
+$ npm run dev -- --host 127.0.0.1 --port 4173 --strictPort
+
+> calmate@0.1.0 dev
+> vite --host 127.0.0.1 --port 4173 --strictPort
+
+
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m345[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m4173[22m/[39m
+Error: [31m  Failed to scan for dependencies from entries:
+  /workspaces/calmate/index.html
+
+  [39mThe service was stopped: write EPIPE
+    at /workspaces/calmate/node_modules/vite/node_modules/esbuild/lib/main.js:993:26
+    at responseCallbacks.<computed> (/workspaces/calmate/node_modules/vite/node_modules/esbuild/lib/main.js:622:9)
+    at afterClose (/workspaces/calmate/node_modules/vite/node_modules/esbuild/lib/main.js:613:28)
+    at /workspaces/calmate/node_modules/vite/node_modules/esbuild/lib/main.js:1983:18
+    at onwriteError (node:internal/streams/writable:418:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:84:21)
+
+readiness_url=http://127.0.0.1:4173/
+ready=true
+exit_code=
