@@ -1,0 +1,6 @@
+commands:
+  check_config: npm run check:config
+  lint: npm run lint
+  test: npm run test
+  build: npm run build
+  check: npm run check

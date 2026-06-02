@@ -13,9 +13,9 @@
         },
         "ghcr.io/devcontainers/features/docker-outside-of-docker": {},
         // "ghcr.io/devcontainers/features/python": {},
-        // "ghcr.io/devcontainers/features/node": {
-            // "version": "lts"
-        // },
+        "ghcr.io/devcontainers/features/node": {
+            "version": "lts"
+        },
         // "ghcr.io/devcontainers/features/go:1": {
         //     "version": "latest"
         // },

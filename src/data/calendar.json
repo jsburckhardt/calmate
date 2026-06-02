@@ -1,0 +1,28 @@
+{
+  "events": [
+    {
+      "id": "evt-001",
+      "title": "Team Meeting",
+      "date": "2026-06-03",
+      "time": "10:00",
+      "description": "Weekly team sync",
+      "type": "meeting"
+    },
+    {
+      "id": "evt-002",
+      "title": "Release Day",
+      "date": "2026-06-12",
+      "time": "09:00",
+      "description": "Deploy dashboard v1",
+      "type": "release"
+    },
+    {
+      "id": "evt-003",
+      "title": "Config Review",
+      "date": "2026-06-12",
+      "time": "15:30",
+      "description": "Validate local JSON dashboard data",
+      "type": "review"
+    }
+  ]
+}
